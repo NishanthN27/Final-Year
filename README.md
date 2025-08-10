@@ -217,6 +217,14 @@ Build a cloud-hosted mock-interview platform that uses a LangGraph orchestrator 
 
 Frontend (Streamlit/React) -> Backend API (FastAPI) -> Orchestrator (LangGraph) — non-LLM -> LLM Agents (9) — resume/job parsing, question retrieval (RAG + Flash fallback), follow-up, fast eval, rubric eval, feedback, personalization, report -> Services: ChromaDB (vector DB), Redis, Azure SQL/CosmosDB, Azure Blob Storage, STT/TTS, Monitoring, Admin Dashboard.
 
+It looks like there was an issue rendering the Mermaid diagram. I'll provide the Mermaid code again, formatted correctly.
+
+### Top-Level Component Map
+
+**Text:**
+
+Frontend (Streamlit/React) -> Backend API (FastAPI) -> Orchestrator (LangGraph) — non-LLM -> LLM Agents (9) — resume/job parsing, question retrieval (RAG + Flash fallback), follow-up, fast eval, rubric eval, feedback, personalization, report -> Services: ChromaDB (vector DB), Redis, Azure SQL/CosmosDB, Azure Blob Storage, STT/TTS, Monitoring, Admin Dashboard.
+
 **Mermaid:**
 
 ```mermaid
