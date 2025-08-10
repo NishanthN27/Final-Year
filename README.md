@@ -211,13 +211,6 @@ Use the following section as a consistent context when interacting with AI assis
 
 Build a cloud-hosted mock-interview platform that uses a LangGraph orchestrator to coordinate 9 LLM agents (parsing, retrieval, evaluation, feedback, personalization, report generation) and one deterministic Orchestrator that routes, slices the canonical session state for each agent, parallelizes evaluation, enforces quotas, and persists snapshots. Use ChromaDB for RAG, Redis for session/cache/locks, Azure Blob for media, and Azure SQL/Cosmos for persistent metadata. Prioritize near-instant UX with Flash for speed-critical paths and Pro for accuracy-critical evaluation and final synthesis. Include an admin dashboard and rubric management in Phase 1 so HITL flows work out of the box.
 
-### Top-Level Component Map
-
-**Text:**
-
-Frontend (Streamlit/React) -> Backend API (FastAPI) -> Orchestrator (LangGraph) — non-LLM -> LLM Agents (9) — resume/job parsing, question retrieval (RAG + Flash fallback), follow-up, fast eval, rubric eval, feedback, personalization, report -> Services: ChromaDB (vector DB), Redis, Azure SQL/CosmosDB, Azure Blob Storage, STT/TTS, Monitoring, Admin Dashboard.
-
-It looks like there was an issue rendering the Mermaid diagram. I'll provide the Mermaid code again, formatted correctly.
 
 ### Top-Level Component Map
 
