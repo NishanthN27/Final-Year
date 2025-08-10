@@ -230,24 +230,24 @@ Frontend (Streamlit/React) -> Backend API (FastAPI) -> Orchestrator (LangGraph) 
 ```mermaid
 flowchart LR
    A[Frontend] -->|REST/WS| B[API Backend]
-   C["Orchestrator (LangGraph) - non-LLM"]
-   C --> D1[ResumeAnalysis (Pro)]
-   C --> D2[JobDescAnalysis (Pro)]
-   C --> D3[QuestionRetrieval (RAG+Flash)]
-   C --> D4[QuestionPresenter (non-LLM)]
-   C --> D5[STT/TTS Service (external)]
-   C --> E1[FastEval (Flash)]
-   C --> E2[RubricEval (Pro)]
-   E1 --> F[EvaluatorSynthesizer (non-LLM)]
+   B --> C["Orchestrator (LangGraph) - non-LLM"]
+   C --> D1["ResumeAnalysis (Pro)"]
+   C --> D2["JobDescAnalysis (Pro)"]
+   C --> D3["QuestionRetrieval (RAG+Flash)"]
+   C --> D4["QuestionPresenter (non-LLM)"]
+   C --> D5["STT/TTS Service (external)"]
+   C --> E1["FastEval (Flash)"]
+   C --> E2["RubricEval (Pro)"]
+   E1 --> F["EvaluatorSynthesizer (non-LLM)"]
    E2 --> F
-   F --> G[FeedbackGen (Pro)]
-   F --> H[FollowUp (Flash)]
-   F --> I[Personalization (Pro)]
-   F --> J[ReportGen (Pro)]
+   F --> G["FeedbackGen (Pro)"]
+   F --> H["FollowUp (Flash)"]
+   F --> I["Personalization (Pro)"]
+   F --> J["ReportGen (Pro)"]
    C --> K[ChromaDB]
    C --> L[Redis]
    C --> M[Persistent DB (Azure SQL/Cosmos)]
-   B --> N[Admin Dashboard (manage rubrics & HITL)]
+   B --> N["Admin Dashboard (manage rubrics & HITL)"]
 ```
 
 ### Clear Separation: LLM Agents vs. Non-LLM Orchestrator
