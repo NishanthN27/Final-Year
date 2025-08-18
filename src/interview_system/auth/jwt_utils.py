@@ -44,3 +44,18 @@ def create_refresh_token(data: dict) -> str:
 
 # You will add a decode/validate function here later
 # for the get_current_user dependency.
+def verify_token(token: str) -> dict | None:
+    """
+    Decodes and validates a JWT token.
+    
+    Args:
+        token: The JWT token string.
+        
+    Returns:
+        The token's payload as a dictionary if valid, otherwise None.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None
