@@ -1,18 +1,16 @@
-# test_question_retrieval.py
+# scripts/test_question_retrieval.py
 
 import os
 import sys
 import pathlib
-import time
-import json # ADDED: Import the json library
-
 from dotenv import load_dotenv
 
-# Ensure the project's src/ is on sys.path for local runs
+# --- Boilerplate to set up path for imports ---
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+# --- End Boilerplate ---
 
 from interview_system.agents.question_retrieval import retrieve_question
 from interview_system.schemas.agent_outputs import (
@@ -21,37 +19,9 @@ from interview_system.schemas.agent_outputs import (
     Skill,
     Project,
 )
-from interview_system.services.vector_store import get_vector_store
+# REMOVED: get_vector_store is not needed here anymore unless you want to check stats
 
-
-def seed_example_questions() -> None:
-    store = get_vector_store()
-    stats = store.index.describe_index_stats()
-    # Check if the index is already seeded to avoid doing it every time
-    if stats["total_vector_count"] > 10: # MODIFIED: Check against a higher number
-        print("Index already contains a significant number of vectors. Skipping seeding.")
-        return
-
-    # --- MODIFIED SECTION START ---
-    # Load questions from the external questions.txt file
-    try:
-        # NOTE: Adjust the path if your script's working directory is different
-        with open("questions.txt", "r") as f:
-            items = json.load(f)
-        print(f"Loading {len(items)} questions from questions.txt...")
-    except FileNotFoundError:
-        print("Error: questions.txt not found. Cannot seed the database.")
-        return
-    except json.JSONDecodeError:
-        print("Error: questions.txt is not a valid JSON file.")
-        return
-    # --- MODIFIED SECTION END ---
-
-    print("Seeding example questions into Pinecone...")
-    store.upsert_questions(items)
-    print("Waiting for 10 seconds for the index to update...")
-    time.sleep(10)
-
+# REMOVED: The entire seed_example_questions function has been moved to seed_database.py
 
 def make_resume_and_job() -> tuple[ResumeAnalysisOutput, JobDescriptionAnalysisOutput]:
     resume = ResumeAnalysisOutput(
@@ -72,26 +42,21 @@ def make_resume_and_job() -> tuple[ResumeAnalysisOutput, JobDescriptionAnalysisO
     )
     return resume, job
 
-
 def main() -> None:
     load_dotenv()
 
-    if not all(
-        os.getenv(k)
-        for k in ["GOOGLE_API_KEY", "PINECONE_API_KEY"]
-    ):
-        print(
-            "Error: GOOGLE_API_KEY and PINECONE_API_KEY must be set in .env file."
-        )
+    if not all(os.getenv(k) for k in ["GOOGLE_API_KEY", "PINECONE_API_KEY"]):
+        print("Error: GOOGLE_API_KEY and PINECONE_API_KEY must be set in .env file.")
         return
 
-    print("--- Initializing vector store and seeding questions ---")
-    seed_example_questions()
+    # REMOVED: The call to seed_example_questions() is gone.
+    print("--- Running Retrieval Tests Against Existing Database ---")
 
     resume, job = make_resume_and_job()
 
     print("\n--- Retrieval Test: technical domain (should hit Pinecone) ---")
     try:
+        # NOTE: Lowered min_relevance to increase chance of getting a match
         out = retrieve_question(
             domain="technical",
             difficulty_hint=6,
@@ -99,7 +64,7 @@ def main() -> None:
             job_analysis=job,
             last_topics=["system-design"],
             top_k=5,
-            min_relevance=0.5,
+            min_relevance=0.4, 
         )
         print(out.model_dump_json(indent=2))
     except Exception as e:
@@ -114,12 +79,11 @@ def main() -> None:
             job_analysis=job,
             last_topics=["feature-store"],
             top_k=3,
-            min_relevance=0.9,  # high threshold to force fallback if any near-miss occurs
+            min_relevance=0.9,  # High threshold to force fallback
         )
         print(out_fb.model_dump_json(indent=2))
     except Exception as e:
         print("Fallback test failed:", e)
-
 
 if __name__ == "__main__":
     main()
