@@ -165,3 +165,46 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* --- AUTH FORMS (MATCH LANDING STYLE) --- */
+.form-styled {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  width: 100%;
+}
+
+.form-styled input {
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 9999px; /* pill shape */
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-styled input:focus {
+  outline: none;
+  border-color: #6a82fb;
+  box-shadow: 0 0 0 3px rgba(106, 130, 251, 0.2);
+}
+
+.auth-links {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.auth-links a {
+  color: #6a82fb;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.auth-links a:hover {
+  color: #8b5cf6;
+}
+
+.forgot-link {
+  display: block;
+  margin-bottom: 0.8rem;
+}

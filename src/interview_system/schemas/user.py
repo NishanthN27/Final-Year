@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
     id: UUID
     name: str
     email: EmailStr
+    role:str
 
     class Config:
         orm_mode = True

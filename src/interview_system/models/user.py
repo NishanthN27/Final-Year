@@ -12,3 +12,4 @@ class User(Base):
     name = Column(String, nullable=False)  # Add this line
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    role = Column(String, nullable=False, server_default='candidate')
