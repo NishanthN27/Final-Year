@@ -67,7 +67,7 @@ def main():
     memory = MemorySaver()
     graph_with_checkpointing = workflow.compile(checkpointer=memory)
 
-    print("\n--- 🚀 Testing Full Graph Flow ---")
+    print("\n--- Testing Full Graph Flow ---")
 
     session_id = uuid.uuid4()
     user_id = uuid.uuid4()

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 # Using Pydantic for QuestionTurn to get validation within the list
 class QuestionTurn(BaseModel):
     question_id: str | None = None
-    question_text: str
+    conversational_text: str
+    raw_question_text: str
     ideal_answer_snippet: str | None = None
     answer_text: str | None = None
     answer_audio_ref: str | None = None
@@ -33,17 +34,14 @@ def merge_question_updates(
     if right is None:
         return left
 
-    # Ensure right is a dict for easier merging
     right_dict = right.model_dump() if isinstance(right, QuestionTurn) else right
-
-    # Create a copy of the left object to modify
     merged = left.model_copy(deep=True)
 
     # Merge the 'evals' dictionaries
     if "evals" in right_dict and right_dict["evals"]:
         merged.evals.update(right_dict["evals"])
 
-    # Allow other fields to be updated if present in 'right'
+    # Allow other fields to be updated
     for key, value in right_dict.items():
         if key != "evals" and value is not None:
             setattr(merged, key, value)
@@ -61,12 +59,17 @@ class SessionState(TypedDict):
 
     resume_summary: dict | None
     job_summary: dict | None
-    question_history: list[QuestionTurn]
+    
+    # This plan guides the high-level flow of the interview
+    interview_plan: list[str]
 
-    # ANNOTATED KEY: Apply the reducer to the current_question field
-    # This tells LangGraph how to merge concurrent updates to this state key.
+    question_history: list[QuestionTurn]
+    
+    # ANNOTATED KEY: This applies the reducer to the current_question field
     current_question: Annotated[
         QuestionTurn | None,
         merge_question_updates,
     ]
+    
     personalization_profile: dict | None
+
