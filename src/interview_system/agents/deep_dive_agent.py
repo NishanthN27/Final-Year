@@ -4,7 +4,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from interview_system.schemas.agent_outputs import (
     ConversationalQuestionOutput,
-    QuestionRetrievalOutput,
+    RawQuestionData,
 )
 from interview_system.services.llm_clients import get_llm
 
@@ -34,20 +34,22 @@ def generate_deep_dive_question(
         prompt = template.render(
             item_name=item_name, project_summary=project_details.get("summary")
         )
-    else:  # Could be 'skill', 'certification', etc.
-        # For simplicity, we'll use a generic prompt for other types for now
-        prompt = f"Ask a deep-dive question about the candidate's experience with {item_name} and present it conversationally. Respond in the required JSON format."  # noqa: E501
+    else:  # Assumes 'skill' for any other type
+        template = env.get_template("deep_dive_skill.j2")
+        prompt = template.render(skill_name=item_name)
 
-    llm = get_llm(model_type="pro")  # Use Pro for high-quality question generation
+    llm = get_llm(model_type="pro")
     response = llm.invoke(prompt)
 
     try:
+        # Robustly find and parse the JSON object from the response
         start_index = response.content.find("{")
         end_index = response.content.rfind("}") + 1
         json_str = response.content[start_index:end_index]
         data = json.loads(json_str)
 
-        raw_question = QuestionRetrievalOutput(**data["raw_question"])
+        # Use the correct, generic schema for generated questions
+        raw_question = RawQuestionData(**data["raw_question"])
 
         return ConversationalQuestionOutput(
             conversational_text=data["conversational_text"], raw_question=raw_question
@@ -56,3 +58,4 @@ def generate_deep_dive_question(
         raise ValueError(
             f"Deep dive generation returned malformed JSON: {response.content}"
         ) from exc
+

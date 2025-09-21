@@ -1,95 +1,65 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from jinja2 import Environment, FileSystemLoader
 
 from interview_system.schemas.agent_outputs import (
     ConversationalQuestionOutput,
     JobDescriptionAnalysisOutput,
-    QuestionRetrievalOutput,
+    RawQuestionData,
     ResumeAnalysisOutput,
 )
 from interview_system.services.llm_clients import get_llm
 from interview_system.services.vector_store import get_vector_store
 
-# We will add a function here later to send generated questions to a review queue
-# from ..repositories.review_queue_repository import ReviewQueueRepository
-
 FALLBACK_MIN_RELEVANCE = 0.35
 
 
-def _transform_query(keywords: list[str]) -> str:
+def _transform_query(
+    resume_summary: dict | None, job_summary: dict | None, domain: str
+) -> str:
     """
-    Uses a fast LLM to transform a list of keywords into a semantically rich,
-    natural-language search query.
+    Uses a fast LLM to transform resume and job summaries into a natural language query.
     """
-    print(f"--- Transforming keywords: {keywords} ---")
     env = Environment(loader=FileSystemLoader("src/interview_system/prompts/"))
     template = env.get_template("query_transformer.j2")
-    prompt = template.render(keywords=keywords)
+
+    prompt = template.render(
+        domain=domain,  # Pass the specific domain for focus
+        resume_summary=resume_summary,
+        job_summary=job_summary,
+    )
 
     llm = get_llm(model_type="flash")
     response = llm.invoke(prompt)
-    
-    # Clean the response to get just the query text
-    transformed_query = response.content.strip().replace('"', '')
-    print(f"--- Transformed Query: {transformed_query} ---")
-    return transformed_query
-
-
-def _build_keyword_list(
-    domain: str,
-    resume_analysis: Optional[ResumeAnalysisOutput] = None,
-    job_analysis: Optional[JobDescriptionAnalysisOutput] = None,
-    last_topics: Optional[List[str]] = None,
-) -> list[str]:
-    """Builds a deduplicated list of keywords from various signals."""
-    terms: List[str] = [domain]
-    if resume_analysis:
-        terms.extend(resume_analysis.topics)
-        terms.extend([s.name for s in resume_analysis.skills])
-    if job_analysis:
-        terms.extend(job_analysis.required_skills)
-        terms.extend(job_analysis.keywords)
-    if last_topics:
-        terms.extend(last_topics)
-    
-    seen: set[str] = set()
-    unique_terms: List[str] = []
-    for t in terms:
-        if t and t.lower() not in seen:
-            unique_terms.append(t)
-            seen.add(t.lower())
-    return unique_terms
+    return response.content.strip().strip('"')
 
 
 def _make_question_conversational(
-    raw_question: QuestionRetrievalOutput,
+    raw_question: RawQuestionData,
 ) -> ConversationalQuestionOutput:
     """Uses a fast LLM to make a retrieved question sound more natural."""
     env = Environment(loader=FileSystemLoader("src/interview_system/prompts/"))
     template = env.get_template("make_question_conversational.j2")
     prompt = template.render(question_text=raw_question.text)
-
     llm = get_llm(model_type="flash")
     response = llm.invoke(prompt)
-
     return ConversationalQuestionOutput(
-        conversational_text=response.content.strip(), raw_question=raw_question
+        conversational_text=response.content.strip().strip('"'),
+        raw_question=raw_question,
     )
 
 
-def _generate_and_present_fallback_question(
+def _generate_and_present_fallback(
     domain: str,
     difficulty_hint: int,
-    resume_analysis: Optional[ResumeAnalysisOutput],
-    job_analysis: Optional[JobDescriptionAnalysisOutput],
-    last_topics: Optional[List[str]],
+    resume_analysis: ResumeAnalysisOutput | None,
+    job_analysis: JobDescriptionAnalysisOutput | None,
+    last_topics: List[str] | None,
 ) -> ConversationalQuestionOutput:
-    """Generates a new question and presents it conversationally in one step."""
+    """Generates a new question and presents it conversationally."""
     env = Environment(loader=FileSystemLoader("src/interview_system/prompts/"))
     template = env.get_template("generate_and_present_fallback.j2")
-
     prompt = template.render(
         domain=domain,
         difficulty=difficulty_hint,
@@ -97,25 +67,16 @@ def _generate_and_present_fallback_question(
         job_keywords=job_analysis.keywords if job_analysis else [],
         last_topics=last_topics or [],
     )
-
     llm = get_llm(model_type="flash")
     response = llm.invoke(prompt)
-
     try:
-        # Use our robust JSON parsing logic
-        start_index = response.content.find('{')
-        end_index = response.content.rfind('}') + 1
+        start_index = response.content.find("{")
+        end_index = response.content.rfind("}") + 1
         json_str = response.content[start_index:end_index]
         data = json.loads(json_str)
-
-        raw_question = QuestionRetrievalOutput(
-            text=data["raw_question"]["text"],
-            domain=data["raw_question"]["domain"],
-            difficulty=data["raw_question"]["difficulty"],
-            ideal_answer_snippet=data["raw_question"]["ideal_answer_snippet"],
-            relevance_score=0.0,
-        )
-
+        raw_question = RawQuestionData(**data["raw_question"])
+        print("--- HITL: Sending generated question to review queue ---")
+        print(json.dumps(raw_question.model_dump(), indent=2))
         return ConversationalQuestionOutput(
             conversational_text=data["conversational_text"], raw_question=raw_question
         )
@@ -128,54 +89,55 @@ def _generate_and_present_fallback_question(
 def retrieve_question(
     *,
     domain: str,
-    difficulty_hint: Optional[int] = None,
-    resume_analysis: Optional[ResumeAnalysisOutput | dict] = None,
-    job_analysis: Optional[JobDescriptionAnalysisOutput | dict] = None,
-    last_topics: Optional[List[str]] = None,
-    top_k: int = 5,
+    resume_analysis: ResumeAnalysisOutput | dict | None = None,
+    job_analysis: JobDescriptionAnalysisOutput | dict | None = None,
+    last_topics: List[str] | None = None,
+    difficulty_hint: int = 5,
     min_relevance: float = FALLBACK_MIN_RELEVANCE,
 ) -> ConversationalQuestionOutput:
     """
     Retrieves a question from the vector DB, making it conversational.
     Falls back to generating a new conversational question if relevance is low.
     """
+    # 1. Ensure we are working with Pydantic objects for consistency
     if resume_analysis and isinstance(resume_analysis, dict):
         resume_analysis = ResumeAnalysisOutput(**resume_analysis)
     if job_analysis and isinstance(job_analysis, dict):
         job_analysis = JobDescriptionAnalysisOutput(**job_analysis)
 
-    # 1. Build keyword list
-    keywords = _build_keyword_list(
+    # 2. Transform the high-level context into a natural language query
+    transformed_query = _transform_query(
+        resume_summary=resume_analysis.model_dump() if resume_analysis else None,
+        job_summary=job_analysis.model_dump() if job_analysis else None,
         domain=domain,
-        resume_analysis=resume_analysis,
-        job_analysis=job_analysis,
-        last_topics=last_topics,
     )
-    
-    # 2. Transform keywords into a high-quality query
-    query = _transform_query(keywords)
+    print(f"--- Transformed Query: {transformed_query} ---")
 
-    conditions: List[Dict[str, Any]] = [{"domain": domain}]
+    # 3. Build a robust filter for the vector store query
+    conditions: List[Dict[str, Any]] = [
+        {"domain": {"$in": [domain, f"technical:{domain}"]}}
+    ]
     if difficulty_hint is not None:
         conditions.append({"difficulty": {"$gte": max(1, difficulty_hint - 2)}})
         conditions.append({"difficulty": {"$lte": min(10, difficulty_hint + 2)}})
-
     where = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
+    # 4. Query the vector store
     store = get_vector_store()
-    candidates = store.query_similar(query_text=query, top_k=top_k, where=where)
+    candidates = store.query_similar(query_text=transformed_query, top_k=1, where=where)
 
     if candidates:
         best = candidates[0]
         relevance = float(best.get("relevance_score", 0.0))
         print(f"--- Best candidate relevance: {relevance} ---")
+
         if relevance >= min_relevance:
             meta = best.get("metadata", {}) or {}
-            raw_question = QuestionRetrievalOutput(
+            raw_question = RawQuestionData(
                 question_id=str(best.get("id")) if best.get("id") else None,
-                text=str(best.get("text")),
+                text=str(meta.get("text", "")),
                 domain=str(meta.get("domain", domain)),
-                difficulty=int(meta.get("difficulty") or difficulty_hint or 5),
+                difficulty=int(meta.get("difficulty", difficulty_hint)),
                 ideal_answer_snippet=str(meta.get("ideal_answer_snippet") or ""),
                 rubric_id=(
                     str(meta.get("rubric_id")) if meta.get("rubric_id") else None
@@ -184,19 +146,12 @@ def retrieve_question(
             )
             return _make_question_conversational(raw_question)
 
-    # If we reach here, it's a fallback scenario
+    # 5. If retrieval fails or relevance is too low, trigger the fallback
     print("--- Low relevance, triggering LLM fallback generation ---")
-    fallback_output = _generate_and_present_fallback_question(
+    return _generate_and_present_fallback(
         domain=domain,
-        difficulty_hint=(difficulty_hint or 5),
+        difficulty_hint=difficulty_hint,
         resume_analysis=resume_analysis,
         job_analysis=job_analysis,
         last_topics=last_topics,
     )
-
-    print("--- HITL: Sending generated question to review queue ---")
-    print(json.dumps(fallback_output.raw_question.model_dump(), indent=2))
-    # send_to_review_queue(fallback_output.raw_question)
-
-    return fallback_output
-

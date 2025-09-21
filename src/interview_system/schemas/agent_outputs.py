@@ -1,18 +1,38 @@
-# src/interview_system/schemas/agent_outputs.py
-
 from pydantic import BaseModel, Field
 
 
-class ConversationalQuestionOutput(BaseModel):
-    """
-    The final output from the question retrieval and presentation flow.
-    """
-
-    conversational_text: str = Field(
-        ..., description="The natural, conversational text to be shown to the user."
+# --- NEW: A Generic Schema for Raw Question Data ---
+# This is used by both retrieved and generated questions.
+class RawQuestionData(BaseModel):
+    question_id: str | None = Field(
+        None, description="UUID of the question if from DB, null otherwise."
     )
-    raw_question: "QuestionRetrievalOutput" = Field(
-        ..., description="The raw, structured data of the question that was asked."
+    text: str = Field(..., description="The raw text of the interview question.")
+    domain: str = Field(
+        ..., description="The domain of the question, e.g., 'system-design'."
+    )
+    difficulty: int = Field(
+        ..., ge=1, le=10, description="Difficulty score from 1 to 10."
+    )
+    ideal_answer_snippet: str = Field(
+        ..., description="A snippet of the ideal answer to guide evaluation."
+    )
+    rubric_id: str | None = Field(
+        None, description="UUID of the associated evaluation rubric."
+    )
+    relevance_score: float | None = Field(
+        None, description="Relevance score from vector search, null if generated."
+    )
+
+
+# --- The output of any question generation/retrieval agent ---
+# This now correctly uses the RawQuestionData schema.
+class ConversationalQuestionOutput(BaseModel):
+    conversational_text: str = Field(
+        ..., description="The natural, conversational text to show to the user."
+    )
+    raw_question: RawQuestionData = Field(
+        ..., description="The structured, raw data of the question."
     )
 
 
@@ -44,32 +64,8 @@ class JobDescriptionAnalysisOutput(BaseModel):
     seniority: str | None = Field(
         None, description="Inferred seniority level, e.g., 'Junior', 'Senior'."
     )
-    # CORRECTED: Field name changed to 'keywords' to match the LLM's output
     keywords: list[str] = Field(
         ..., description="List of must-have keywords or technologies."
-    )
-
-
-# --- QuestionRetrievalAgent ---
-class QuestionRetrievalOutput(BaseModel):
-    question_id: str | None = Field(
-        None, description="UUID of the question if from DB, null otherwise."
-    )
-    text: str = Field(..., description="The text of the interview question.")
-    domain: str = Field(
-        ..., description="The domain of the question, e.g., 'system-design'."
-    )
-    difficulty: int = Field(
-        ..., ge=1, le=10, description="Difficulty score from 1 to 10."
-    )
-    ideal_answer_snippet: str = Field(
-        ..., description="A snippet of the ideal answer to guide evaluation."
-    )
-    rubric_id: str | None = Field(
-        None, description="UUID of the associated evaluation rubric."
-    )
-    relevance_score: float = Field(
-        ..., description="Relevance score from the vector search."
     )
 
 
