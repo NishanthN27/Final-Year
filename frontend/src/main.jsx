@@ -1,18 +1,56 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import App from './App.jsx';
+
+// Import Global Styles and Context Providers
+import './index.css'; // Using the new index.css for Tailwind
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+
+// Import Page Components
+import App from './App.jsx'; // The main landing page
 import SignIn from './pages/SignIn.jsx';
 import SignUp from './pages/SignUp.jsx';
+import HomePage from './pages/Homepage.jsx'; // For logged-in candidates
+import AdminDashboardPage from './pages/AdminDashboardPage.jsx';
+import ReviewQueuePage from './pages/ReviewQueuePage.jsx';
+import RubricEditorPage from './pages/RubricEditorPage.jsx';
+import UnauthorizedPage from './pages/UnauthorizedPage.jsx';
+
+// Import the Protected Route Component
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="/signup" element={<SignUp />} />
-      </Routes>
+      <AuthProvider>
+        <ThemeProvider>
+          <Routes>
+            {/* --- Public Routes --- */}
+            <Route path="/" element={<App />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+            {/* --- User-Specific Home Route --- */}
+            {/* This could also be protected if you want to ensure only candidates see it */}
+            <Route path="/home" element={<HomePage />} />
+            
+            {/* --- Protected Admin Routes --- */}
+            {/* This wrapper ensures only users with the 'admin' role can access the nested routes */}
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/admin" element={<AdminDashboardPage />} />
+              <Route path="/admin/review-queue" element={<ReviewQueuePage />} />
+              <Route path="/admin/rubrics" element={<RubricEditorPage />} />
+              {/* Add other admin routes here, e.g., /admin/users */}
+            </Route>
+
+            {/* Optional: Add a 404 Not Found route here */}
+            
+          </Routes>
+        </ThemeProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 );
+

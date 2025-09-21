@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode'; // Import jwt-decode
+import { useAuth } from '../contexts/AuthContext'; // Import the useAuth hook
 import '../App.css';
 
 function SignIn() {
   const [formData, setFormData] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  
   const navigate = useNavigate();
+  const { login } = useAuth(); // Get the login function from our context
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -16,25 +20,38 @@ function SignIn() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError(null);
 
     try {
-      const response = await axios.post('http://localhost:8000/auth/login', formData);
+      const response = await axios.post('http://localhost:8000/auth/login', {
+        email: formData.email,
+        password: formData.password
+      });
       
-      // Store tokens in localStorage on successful login
-      localStorage.setItem('accessToken', response.data.access_token);
-      localStorage.setItem('refreshToken', response.data.refresh_token);
+      const { access_token, refresh_token } = response.data;
 
-      // TODO: Decode token to get role and navigate to the correct dashboard
-      navigate('/dashboard'); // Placeholder for now
+      // Use the login function from the context
+      login(access_token);
+      
+      // Also store the refresh token
+      localStorage.setItem('refreshToken', refresh_token);
+
+      // Decode the token to check the user's role
+      const decodedUser = jwtDecode(access_token);
+      
+      // Redirect based on role
+      if (decodedUser.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/home'); // Or a candidate-specific dashboard
+      }
 
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setError(err.response.data.detail);
+      if (err.response && err.response.data) {
+        setError(err.response.data.detail || 'Login failed. Please check your credentials.');
       } else {
-        setError('Login failed. Please check your credentials.');
+        setError('An unexpected error occurred.');
       }
-      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -61,7 +78,7 @@ function SignIn() {
             onChange={handleChange}
             required
           />
-          {error && <p style={{ color: 'red', textAlign: 'center' }}>{error}</p>}
+          {error && <p className="error-message" style={{color: 'red', marginTop: '1rem'}}>{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={isLoading}>
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
@@ -78,3 +95,4 @@ function SignIn() {
 }
 
 export default SignIn;
+
