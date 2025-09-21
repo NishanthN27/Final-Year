@@ -1,6 +1,12 @@
+Of course. I have reviewed your changes and integrated them into the original document, ensuring the initial GitHub README formatting—including markdown for headers, code blocks, and lists—is fully preserved. I have also made sure not to shorten or remove any sections you wished to keep.
+
+Here is the updated document:
+
+***
+
 # Multi-Agentic RAG Interview System
 
-This project is a cloud-hosted mock-interview platform that uses a LangGraph orchestrator to coordinate 9 LLM agents. This document contains the complete Phase-1 plan, architecture, and setup instructions.
+This project is a cloud-hosted mock-interview platform that uses a LangGraph orchestrator to coordinate 10 LLM agents. This document contains the complete Phase-1 plan, architecture, and setup instructions.
 
 ## Getting Started
 
@@ -56,7 +62,7 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-Now, open the `.env` file and add your necessary API keys (like `GOOGLE_API_KEY`, etc.).
+Now, open the `.env` file and add your necessary API keys (like `GOOGLE_API_KEY`, `PINECONE_API_KEY`, etc.).
 
 ### 6. Run the Application
 
@@ -81,7 +87,7 @@ multi-agentic-rag-system/
 ├── .gitignore              # --- Files to ignore in version control
 ├── docker-compose.yml      # --- Services for local development (DB, Redis, etc.)
 ├── Dockerfile              # --- Main application container build instructions
-├── pyproject.toml          # --- Project dependencies and metadata (Poetry/PDM)
+├── pyproject.toml          # --- Project dependencies and metadata
 ├── README.md               # --- High-level project documentation
 │
 ├── scripts/                # --- Standalone operational/maintenance scripts
@@ -93,11 +99,12 @@ multi-agentic-rag-system/
 │       ├── __init__.py
 │       ├── logging_config.py   # --- Centralized structured logging configuration
 │       │
-│       ├── agents/             # --- Logic for each of the 9 individual LLM agents
+│       ├── agents/             # --- Logic for each of the individual LLM agents
 │       │   ├── __init__.py
 │       │   ├── resume_analyzer.py
 │       │   ├── job_description_analyzer.py
 │       │   ├── question_retrieval.py
+│       │   ├── deep_dive_agent.py
 │       │   ├── fast_eval_agent.py
 │       │   ├── rubric_eval_agent.py
 │       │   ├── feedback_generator.py
@@ -115,7 +122,7 @@ multi-agentic-rag-system/
 │       │
 │       ├── auth/               # --- Authentication & user management logic
 │       │   ├── __init__.py
-│       │   ├── dependencies.py   # --- FastAPI security dependencies (e.g., get_current_user)
+│       │   ├── dependencies.py   # --- FastAPI security dependencies
 │       │   ├── jwt_utils.py      # --- JWT token creation and verification logic
 │       │   ├── password_utils.py # --- Password hashing and validation
 │       │   └── router.py         # --- Auth endpoints: /register, /login, /refresh
@@ -144,10 +151,10 @@ multi-agentic-rag-system/
 │       │   ├── __init__.py
 │       │   └── ...
 │       │
-│       ├── rag/                # --- Retrieval-Augmented Generation pipeline
+│       ├── rag/                # --- Advanced Retrieval-Augmented Generation logic
 │       │   ├── __init__.py
-│       │   ├── pipeline.py
-│       │   └── retriever.py
+│       │   ├── query_transformer.py
+│       │   └── reranker.py     # For future implementation
 │       │
 │       ├── repositories/       # --- Data access layer (abstracts DB operations)
 │       │   ├── __init__.py
@@ -162,7 +169,7 @@ multi-agentic-rag-system/
 │       │
 │       └── services/           # --- Wrappers for external services
 │           ├── __init__.py
-│           ├── vector_store.py # --- ChromaDB client
+│           ├── vector_store.py # --- Pinecone client
 │           ├── cache.py        # --- Redis client
 │           └── llm_clients.py  # --- Gemini Flash & Pro clients
 │
@@ -204,19 +211,18 @@ Use the following section as a consistent context when interacting with AI assis
 
 ### Multi-Agentic RAG Interview System — Complete Phase-1 Plan
 
-- **Architecture:** 9 LLM agents + 1 non-LLM Orchestrator (LangGraph).
+- **Architecture:** 10 LLM agents + 1 non-LLM Orchestrator (LangGraph).
 - **Models:** Gemini 2.5 Flash (fast calls) & Gemini 2.5 Pro (deep calls).
 
 ### Executive Summary
 
-Build a cloud-hosted mock-interview platform that uses a LangGraph orchestrator to coordinate 9 LLM agents (parsing, retrieval, evaluation, feedback, personalization, report generation) and one deterministic Orchestrator that routes, slices the canonical session state for each agent, parallelizes evaluation, enforces quotas, and persists snapshots. Use ChromaDB for RAG, Redis for session/cache/locks, Azure Blob for media, and Azure SQL/Cosmos for persistent metadata. Prioritize near-instant UX with Flash for speed-critical paths and Pro for accuracy-critical evaluation and final synthesis. Include an admin dashboard and rubric management in Phase 1 so HITL flows work out of the box.
-
+Build a cloud-hosted mock-interview platform that uses a LangGraph orchestrator to coordinate 10 LLM agents (parsing, retrieval, dynamic question generation, evaluation, feedback, personalization, report generation) and one deterministic Orchestrator. The Orchestrator follows a dynamic "Interview Plan", routes tasks, slices the canonical session state for each agent, parallelizes evaluation, enforces quotas, and persists snapshots. Use **Pinecone** for RAG, Redis for session/cache/locks, Azure Blob for media, and Azure SQL/Cosmos for persistent metadata. Prioritize near-instant UX with Flash for speed-critical paths and Pro for accuracy-critical evaluation and final synthesis. Include an admin dashboard and rubric management in Phase 1 so HITL flows work out of the box.
 
 ### Top-Level Component Map
 
 **Text:**
 
-Frontend (Streamlit/React) -> Backend API (FastAPI) -> Orchestrator (LangGraph) — non-LLM -> LLM Agents (9) — resume/job parsing, question retrieval (RAG + Flash fallback), follow-up, fast eval, rubric eval, feedback, personalization, report -> Services: ChromaDB (vector DB), Redis, Azure SQL/CosmosDB, Azure Blob Storage, STT/TTS, Monitoring, Admin Dashboard.
+Frontend (Streamlit/React) -> Backend API (FastAPI) -> Orchestrator (LangGraph) — non-LLM -> LLM Agents (10) — resume/job parsing, question retrieval (RAG), deep-dive question generation, follow-up, fast eval, rubric eval, feedback, personalization, report -> Services: **Pinecone** (vector DB), Redis, Azure SQL/CosmosDB, Azure Blob Storage, STT/TTS, Monitoring, Admin Dashboard.
 
 **Mermaid:**
 
@@ -227,7 +233,7 @@ flowchart LR
    C --> D1["ResumeAnalysis (Pro)"]
    C --> D2["JobDescAnalysis (Pro)"]
    C --> D3["QuestionRetrieval (RAG+Flash)"]
-   C --> D4["QuestionPresenter (non-LLM)"]
+   C --> D4["DeepDiveGen (Pro)"]
    C --> D5["STT/TTS Service (external)"]
    C --> E1["FastEval (Flash)"]
    C --> E2["RubricEval (Pro)"]
@@ -237,7 +243,7 @@ flowchart LR
    F --> H["FollowUp (Flash)"]
    F --> I["Personalization (Pro)"]
    F --> J["ReportGen (Pro)"]
-   C --> K[ChromaDB]
+   C --> K[Pinecone]
    C --> L[Redis]
    C --> M["Persistent DB (Azure SQL/Cosmos)"]
    B --> N["Admin Dashboard (manage rubrics & HITL)"]
@@ -247,66 +253,64 @@ flowchart LR
 
 **Non-LLM (Deterministic):**
 
-- Orchestrator (LangGraph node graph + Python code)
-- QuestionPresenter (formatting/tts trigger)
+- Orchestrator (LangGraph node graph + Python code, follows an "Interview Plan")
 - EvaluatorSynthesizer (merge fast+rubric outputs)
 - Simple business rules (AdaptiveDifficulty logic)
 
-**LLM Agents (9):** Each returns JSON/Pydantic outputs:
+**LLM Agents (10):** Each returns JSON/Pydantic outputs:
 
 1.  **ResumeAnalysisAgent** — Gemini 2.5 Pro
 2.  **JobDescAnalysisAgent** — Gemini 2.5 Pro
-3.  **QuestionRetrievalAgent** — ChromaDB retrieval + Gemini 2.5 Flash fallback for generation
-4.  **FastEvalAgent** — Gemini 2.5 Flash
-5.  **RubricEvalAgent** — Gemini 2.5 Pro
-6.  **FeedbackGenAgent** — Gemini 2.5 Pro
-7.  **FollowUpAgent** — Gemini 2.5 Flash
-8.  **PersonalizationAgent** — Gemini 2.5 Pro
-9.  **ReportGenAgent** — Gemini 2.5 Pro
+3.  **QuestionRetrievalAgent** — Pinecone retrieval + Query Transformation (Flash) + Conversational Polish (Flash) + Fallback Generation (Flash)
+4.  **DeepDiveAgent** — Gemini 2.5 Pro (Generates new questions about resume specifics)
+5.  **FastEvalAgent** — Gemini 2.5 Flash
+6.  **RubricEvalAgent** — Gemini 2.5 Pro
+7.  **FeedbackGenAgent** — Gemini 2.5 Pro
+8.  **FollowUpAgent** — Gemini 2.5 Flash
+9.  **PersonalizationAgent** — Gemini 2.5 Pro
+10. **ReportGenAgent** — Gemini 2.5 Pro
 
 _Note: `AdminQuestionReview` can be a UI with optional LLM suggestions (Flash) but the dashboard itself and approval logic are non-LLM._
 
 ### Rationale for Model Assignments (Short)
 
-- **Flash (Gemini 2.5 Flash):** Low latency, used for user-facing quick interactions: question generation fallback, quick evaluations, follow-ups.
-- **Pro (Gemini 2.5 Pro):** Higher reasoning and consistency for parsing resumes, job descriptions, rubrics, feedback synthesis, personalization, and final report.
+- **Flash (Gemini 2.5 Flash):** Low latency, used for user-facing quick interactions: conversational polishing, query transformation, fallback generation, quick evaluations, follow-ups.
+- **Pro (Gemini 2.5 Pro):** Higher reasoning and consistency for parsing resumes, job descriptions, generating deep-dive questions, detailed rubric evaluations, feedback synthesis, personalization, and the final report.
 
 ### Canonical Session State & Selector Pattern (Essential)
 
-**Principle:** The Orchestrator stores the full `SessionState` but passes only the minimum slice each agent needs. This avoids token bloat and keeps agents testable.
+**Principle:** The Orchestrator stores the full `SessionState` but passes only the minimum slice each agent needs.
 
 **SessionState (Pydantic sketch):**
 
 ```python
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any, TypedDict
+from datetime import datetime
+from uuid import UUID
+
 class QuestionTurn(BaseModel):
     question_id: Optional[str]
-    question_text: str
+    conversational_text: str # Text shown to the user
+    raw_question_text: str # The original question for evaluation
     ideal_answer_snippet: Optional[str]
     answer_text: Optional[str]
-    answer_audio_ref: Optional[str]
     evals: Optional[Dict[str, Any]]  # fast and rubric outputs
     feedback: Optional[Dict[str, Any]]
     timestamp: datetime
 
-class SessionState(BaseModel):
+class SessionState(TypedDict):
     session_id: UUID
     user_id: UUID
     resume_summary: Optional[dict]
     job_summary: Optional[dict]
-    question_history: List[QuestionTurn] = []
+    interview_plan: list[str] # Guides the interview flow
+    question_history: List[QuestionTurn]
     current_question: Optional[QuestionTurn]
     personalization_profile: Optional[dict]
     created_at: datetime
     updated_at: datetime
 ```
-
-**Example Selector Rules:**
-
-- `FastEval` input = `{ question_text, answer_text, ideal_answer_snippet }`
-- `RubricEval` input = `{ question_text, answer_text, rubric_schema, ideal_answer_snippet }`
-- `FeedbackGen` input = `{ merged_evaluation, last_n_turns_summary, personalization_profile }`
-
-Implement `select_input_for(agent_name, session_state)` in Orchestrator.
 
 ### Pydantic Contracts & Sample JSON Outputs (For Every Agent)
 
@@ -415,8 +419,6 @@ Below are minimal JSON outputs each agent must return. Use these Pydantic schema
 
 ### Detailed Agent-by-Agent Responsibilities & Prompt Guidance
 
-I’ll summarize actionable prompt templates/behavior for each (shortened; keep in a `prompt_templates.md` in the repo).
-
 - **ResumeAnalysisAgent (Pro)**
   - **Input:** resume text
   - **Prompt:** "Extract JSON: skills (with confidence), topics, experience bullets, projects. Return ONLY valid JSON per schema."
@@ -424,17 +426,23 @@ I’ll summarize actionable prompt templates/behavior for each (shortened; keep 
 - **JobDescAnalysisAgent (Pro)**
   - **Input:** job posting
   - **Prompt:** Extract required skills, seniority, must-have keywords.
-- **QuestionRetrievalAgent (ChromaDB + Flash)**
+- **QuestionRetrievalAgent (Pinecone + Flash)**
   - **Flow:**
-    1.  Build retrieval query: combine `resume_topics` + `job_keywords` + `last_topics`.
-    2.  Query ChromaDB for top-K.
-    3.  If `relevance_score` < threshold → call Flash with short prompt to synthesize one question.
-  - **Prompt (fallback):** "Using this profile and job summary, produce one interview question of difficulty N and short ideal answer."
+    1.  Receives a topic (e.g., "behavioral") from the Orchestrator's plan.
+    2.  Builds a keyword list using resume/job summaries.
+    3.  **Calls Query Transformer (Flash):** Converts keywords into a natural language query.
+    4.  Queries Pinecone with the transformed query.
+    5.  If relevance is high, **calls Conversational Polish (Flash):** Rephrases the retrieved question to be conversational.
+    6.  If relevance is low, **calls Fallback Generator (Flash):** Generates a new question and presents it conversationally in one step. The raw question is sent to the HITL review queue.
+- **DeepDiveAgent (Pro)**
+  - **Input:** A topic from the plan (e.g., `deep_dive:project:Orion`), and the `resume_summary`.
+  - **Action:** Generates a brand new, insightful question about that specific project or skill.
+  - **Output:** A conversational question, ready to be presented to the user.
 - **FastEvalAgent (Flash)**
-  - **Purpose:** Immediate UX feedback.
+  - **Purpose:** Immediate UX feedback. (Now uses `raw_question_text` for evaluation).
   - **Prompt:** Include `ideal_answer_snippet`, ask for 0–100 score + one-sentence feedback.
 - **RubricEvalAgent (Pro)**
-  - **Purpose:** Deep, per-item scoring.
+  - **Purpose:** Deep, per-item scoring. (Now uses `raw_question_text` for evaluation).
   - **Prompt:** Include rubric JSON; ask for per-item score & structured notes.
 - **EvaluatorSynthesizer (non-LLM)**
   - **Algorithm:** Deterministic merging (weights: Rubric 0.7, Fast 0.3), normalize, create canonical evaluation.
@@ -474,7 +482,7 @@ This keeps complexity low and cost predictable.
 
 1.  Fallback LLM generates question. If `RubricEval` later rates it >= 85 (or admin flags it), push to `review_queue`.
 2.  Admin dashboard: List pending items with AI-suggested edits (Flash suggestion). Admin can Approve/Reject/Edit.
-3.  Upon approval → index into ChromaDB with chosen metadata/rubric and mark `promoted_by_admin=userid`.
+3.  Upon approval → index into **Pinecone** with chosen metadata/rubric and mark `promoted_by_admin=userid`.
 
 **Admin Dashboard Minimal Features (Phase 1 Required):**
 
@@ -530,11 +538,12 @@ Store large blobs (resume PDFs, audio) in Azure Blob and keep references.
 - `RubricEvalAgent` (Gemini 2.5 Pro) — frequent, per-answer deep evaluations.
 - `ReportGen` & `FeedbackGen` (Pro) — large-context, heavy token usage.
 - `ResumeAnalysis`/`JobDescAnalysis` (Pro) — one-time per session, moderate cost.
+- **`DeepDiveAgent` (Pro)** - Newly added cost center for dynamic question generation.
 
 **Suggested Budget Control Strategies:**
 
 - Cache Pro outputs (Resume & JobDesc) for 24–72 hours per user.
-- **Borderline Heuristic:** Only invoke `RubricEval` (Pro) when `FastEval` score ∈. If `FastEval` score >80 accept quick pass, if <60 accept quick fail + feedback; run `RubricEval` only when borderline or flagged.
+- **Borderline Heuristic:** Only invoke `RubricEval` (Pro) when `FastEval` score is between 60 and 80. If score >80, accept quick pass; if <60, accept quick fail.
 - **Context Compression:** Run a cheap Flash summarizer to compress the entire session into a ~400–700 token JSON summary and pass that to Pro when generating the final report or personalization plan.
 - **Rate Limits & Quotas:** Per-user/month quota enforced by Orchestrator. If exceeded, degrade to Flash-only or show “upgrade” prompt.
 - **Batching & Truncation:** For large code answers, run unit tests or call a specialized code-eval tool instead of long-text Pro analysis.
@@ -558,10 +567,10 @@ Track token counts per call in dev (Flash vs Pro). Multiply by per-token price f
 ### Testing & QA
 
 - **Unit tests:**
-  - Validate `select_input_for()` mapping for each agent.
+  - Validate selector patterns for each agent.
   - Mock LLM outputs and test merging logic.
 - **Integration tests:**
-  - Start-to-end session with mocks for ChromaDB & STT/TTS.
+  - Start-to-end session with mocks for **Pinecone** & STT/TTS.
 - **Golden tests:**
   - For 50 canonical Q/A pairs, assert `RubricEval` outputs match human labels within tolerance.
 - **Load tests:**
@@ -574,7 +583,7 @@ Track token counts per call in dev (Flash vs Pro). Multiply by per-token price f
 ### Security & Privacy (Must-Haves)
 
 - TLS everywhere.
-- JWT + refresh tokens, password hashing (argon2/bcrypt).
+- JWT + refresh tokens, password hashing (bcrypt).
 - Encrypt PII & blobs at rest.
 - Consent UI for audio recording.
 - Data retention & deletion endpoints for GDPR compliance.
@@ -587,33 +596,30 @@ Track token counts per call in dev (Flash vs Pro). Multiply by per-token price f
 
 - Review queue for candidate/AI-generated questions (approve/reject/edit).
 - Rubric creation/editor: JSON schema editor with examples.
-- One-click promote to ChromaDB.
+- One-click promote to **Pinecone**.
 - View usage stats & question popularity.
 
 ---
 
-### Team Responsibilities & Sprint Plan (8 Weeks Aggressive — Single Phase with All Features)
+### Team Responsibilities & Sprint Plan (8 Weeks Aggressive)
 
 **Roles:**
 
-- **You:** Agent logic + LangGraph orchestration + evaluators merging + model wrappers.
+- **You:** Agent logic (`DeepDiveAgent`), LangGraph orchestration (Interview Plan logic), evaluators merging.
 - **Member A:** Backend API (FastAPI) + Auth + DB (sessions/users).
-- **Member B:** RAG pipeline (ChromaDB ingestion, retrieval API) + data curation.
+- **Member B:** RAG pipeline (**Pinecone** ingestion, Query Transformer, data curation, HITL workflow).
 - **Member C:** Frontend (Streamlit/React), Admin Dashboard, STT/TTS integration.
 
 **Week-by-Week (8 Weeks):**
 
-- **Wk0:** Project setup, infra, repo, CI/CD.
-- **Wk1:** Auth + DB models + session APIs; basic frontend skeleton.
-- **Wk2:** `ResumeAnalysis` + `JobDescAnalysis` prototypes (Pro calls); ChromaDB ingestion seed.
-- **Wk3:** `QuestionRetrieval` + fallback generation; `QuestionPresenter` & UI wiring.
-- **Wk4:** `FastEval` (Flash) + QuickTake UI; initial Orchestrator slice/selector logic.
+- **Wk0-1:** Project setup, Auth, DB Models, API skeleton.
+- **Wk2:** `ResumeAnalysis` + `JobDescAnalysis` prototypes; **Pinecone** ingestion seed.
+- **Wk3:** `QuestionRetrieval` (with Query Transformation) + `DeepDiveAgent` prototypes.
+- **Wk4:** `FastEval` (Flash) + initial Orchestrator logic with **Interview Plan router**.
 - **Wk5:** `RubricEval` (Pro) + `EvaluatorSynthesizer` + merging logic; admin review queue.
 - **Wk6:** `FeedbackGen`, `FollowUp`, `Personalization`, `ReportGen` (Pro); context compression.
 - **Wk7:** End-to-end integration, load testing, implement cost heuristics (borderline rule).
 - **Wk8:** QA, human calibration, infra hardening, documentation, deploy to staging.
-
-**Deliverables per week:** (Detailed tasks to put into ticket tracker).
 
 ---
 
@@ -624,6 +630,6 @@ Track token counts per call in dev (Flash vs Pro). Multiply by per-token price f
 - `FastEval` returns within ~2s for 90% of rounds.
 - `RubricEval` returns within 3–8s and its output is merged correctly.
 - Follow-up micro-loop behaves per rules and does not cause double-evaluation unless needed.
-- Admin can approve LLM-generated questions into ChromaDB.
+- Admin can approve LLM-generated questions into **Pinecone**.
 - Session history persisted and resumable.
 - Basic security & consent flows implemented.
