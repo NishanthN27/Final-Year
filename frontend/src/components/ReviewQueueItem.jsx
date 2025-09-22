@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext'; // Import useTheme hook
 
 const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
+  const { isDark } = useTheme(); // Access the theme state
   const [showDetails, setShowDetails] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -9,20 +11,20 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      approved: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800'
+      pending: isDark ? 'bg-yellow-700 text-yellow-100' : 'bg-yellow-100 text-yellow-800',
+      approved: isDark ? 'bg-green-700 text-green-100' : 'bg-green-100 text-green-800',
+      rejected: isDark ? 'bg-red-700 text-red-100' : 'bg-red-100 text-red-800'
     };
-    return badges[status] || 'bg-gray-100 text-gray-800';
+    return badges[status] || (isDark ? 'bg-gray-700 text-gray-100' : 'bg-gray-100 text-gray-800');
   };
 
   const getDifficultyBadge = (difficulty) => {
     const badges = {
-      easy: 'bg-green-100 text-green-800',
-      medium: 'bg-yellow-100 text-yellow-800',
-      hard: 'bg-red-100 text-red-800'
+      easy: isDark ? 'bg-green-700 text-green-100' : 'bg-green-100 text-green-800',
+      medium: isDark ? 'bg-yellow-700 text-yellow-100' : 'bg-yellow-100 text-yellow-800',
+      hard: isDark ? 'bg-red-700 text-red-100' : 'bg-red-100 text-red-800'
     };
-    return badges[difficulty] || 'bg-gray-100 text-gray-800';
+    return badges[difficulty] || (isDark ? 'bg-gray-700 text-gray-100' : 'bg-gray-100 text-gray-800');
   };
 
   const handleReviewAction = async (action) => {
@@ -50,16 +52,16 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
 
   return (
     <>
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+      <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm hover:shadow-md transition-shadow`}>
         <div className="p-6">
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-2`}>
                 {item.question_text}
               </h3>
               <div className="flex items-center space-x-3 text-sm text-gray-600">
-                <span className="font-medium">Domain: {item.domain}</span>
+                <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Domain: {item.domain}</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyBadge(item.difficulty)}`}>
                   {item.difficulty}
                 </span>
@@ -74,8 +76,8 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
           <div className="mb-4">
             {item.expected_answer && (
               <div className="mb-3">
-                <h4 className="text-sm font-medium text-gray-700 mb-1">Expected Answer:</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-1`}>Expected Answer:</h4>
+                <p className={`text-sm ${isDark ? 'text-gray-400 bg-slate-700' : 'text-gray-600 bg-gray-50'} p-3 rounded`}>
                   {showDetails ? item.expected_answer : `${item.expected_answer.substring(0, 150)}...`}
                 </p>
               </div>
@@ -83,8 +85,8 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
             
             {item.evaluation_criteria && (
               <div className="mb-3">
-                <h4 className="text-sm font-medium text-gray-700 mb-1">Evaluation Criteria:</h4>
-                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-1`}>Evaluation Criteria:</h4>
+                <div className={`text-sm ${isDark ? 'text-gray-400 bg-slate-700' : 'text-gray-600 bg-gray-50'} p-3 rounded`}>
                   {typeof item.evaluation_criteria === 'object' ? (
                     <pre className="whitespace-pre-wrap text-xs">
                       {JSON.stringify(item.evaluation_criteria, null, 2)}
@@ -98,14 +100,14 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
 
             <button
               onClick={() => setShowDetails(!showDetails)}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              className={`text-sm font-medium ${isDark ? 'text-blue-400 hover:text-blue-500' : 'text-blue-600 hover:text-blue-800'}`}
             >
               {showDetails ? 'Show Less' : 'Show More'}
             </button>
           </div>
 
           {/* Metadata */}
-          <div className="text-xs text-gray-500 mb-4 space-y-1">
+          <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mb-4 space-y-1`}>
             <div>Suggested by: {item.suggested_by || 'Unknown'}</div>
             <div>Created: {new Date(item.created_at).toLocaleDateString()}</div>
             {item.reviewed_at && (
@@ -153,24 +155,24 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit, onDelete }) => {
       {/* Review Modal */}
       {showReviewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className={`${isDark ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'} rounded-lg p-6 w-full max-w-md`}>
             <h3 className="text-lg font-semibold mb-4">
               {reviewAction === 'approve' ? 'Approve' : 'Reject'} Question
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className={`mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               Are you sure you want to {reviewAction} this question? You can add optional review notes below.
             </p>
             <textarea
               value={reviewNotes}
               onChange={(e) => setReviewNotes(e.target.value)}
               placeholder="Optional review notes..."
-              className="w-full p-3 border border-gray-300 rounded-md resize-none"
+              className={`w-full p-3 border rounded-md resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900'}`}
               rows={3}
             />
             <div className="flex items-center justify-end space-x-3 mt-4">
               <button
                 onClick={() => setShowReviewModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                className={`px-4 py-2 rounded-md ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
                 disabled={loading}
               >
                 Cancel

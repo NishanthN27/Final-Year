@@ -9,7 +9,7 @@ function SignIn() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const navigate = useNavigate();
   const { login } = useAuth(); // Get the login function from our context
 
@@ -23,22 +23,22 @@ function SignIn() {
     setError(null);
 
     try {
-      const response = await axios.post('http://localhost:8000/auth/login', {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/login`, {
         email: formData.email,
         password: formData.password
       });
-      
+
       const { access_token, refresh_token } = response.data;
 
       // Use the login function from the context
       login(access_token);
-      
+
       // Also store the refresh token
       localStorage.setItem('refreshToken', refresh_token);
 
       // Decode the token to check the user's role
       const decodedUser = jwtDecode(access_token);
-      
+
       // Redirect based on role
       if (decodedUser.role === 'admin') {
         navigate('/admin');
@@ -78,7 +78,7 @@ function SignIn() {
             onChange={handleChange}
             required
           />
-          {error && <p className="error-message" style={{color: 'red', marginTop: '1rem'}}>{error}</p>}
+          {error && <p className="error-message" style={{ color: 'red', marginTop: '1rem' }}>{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={isLoading}>
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>

@@ -11,7 +11,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import App from './App.jsx'; // The main landing page
 import SignIn from './pages/SignIn.jsx';
 import SignUp from './pages/SignUp.jsx';
-import HomePage from './pages/HomePage.jsx'; // For logged-in candidates
+// import HomePage from './pages/HomePage.jsx'; // For logged-in candidates
 import AdminDashboardPage from './pages/AdminDashboardPage.jsx';
 import ReviewQueuePage from './pages/ReviewQueuePage.jsx';
 import RubricEditorPage from './pages/RubricEditorPage.jsx';
@@ -20,6 +20,7 @@ import CandidateDashboardPage from './pages/CandidateDashboardPage.jsx';
 
 // Import the Protected Route Component
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import AdminLayout from './components/AdminLayout.jsx'; 
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -40,11 +41,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             {/* --- Protected Admin Routes --- */}
             {/* This wrapper ensures only users with the 'admin' role can access the nested routes */}
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route path="/admin" element={<HomePage />} />
-              <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-              <Route path="/admin/review-queue" element={<ReviewQueuePage />} />
-              <Route path="/admin/rubrics" element={<RubricEditorPage />} />
-              {/* Add other admin routes here, e.g., /admin/users */}
+              <Route path="/admin/" element={<AdminLayout />}> {/* Use AdminLayout as the parent route */}
+                <Route index element={<AdminDashboardPage />} /> {/* The default route for /admin */}
+                <Route path="review-queue" element={<ReviewQueuePage />} />
+                <Route path="rubrics" element={<RubricEditorPage />} />
+                {/* Add other admin routes here, e.g., <Route path="users" element={<UsersPage />} /> */}
+              </Route>
             </Route>
 
             {/* Optional: Add a 404 Not Found route here */}

@@ -19,7 +19,7 @@ function SignUp() {
     setError('');
 
     try {
-      await axios.post('http://localhost:8000/auth/register', formData);
+      await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, formData);
       // On success, automatically navigate to the sign-in page
       navigate('/signin');
     } catch (err) {
