@@ -65,7 +65,7 @@ const HomePage = () => {
           {/* Feature Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             <Link
-              to="/admin"
+              to="/admin/dashboard"
               className={`group p-8 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
                 isDark
                   ? 'bg-gray-800 border border-gray-700 hover:border-blue-500'
