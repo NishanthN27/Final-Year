@@ -238,21 +238,21 @@ const RubricEditorPage = () => {
               <span>Settings</span>
             </Link>
           </nav>
-        </div>
 
-        {/* Theme Toggle */}
-        <div className="absolute bottom-6 left-6 right-6">
-          <button
-            onClick={toggleTheme}
-            className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-              isDark 
-                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
-          </button>
+          {/* Theme Toggle */}
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={toggleTheme}
+              className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                isDark 
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
