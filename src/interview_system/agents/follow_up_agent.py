@@ -6,7 +6,7 @@ from interview_system.schemas.agent_outputs import FollowUpOutput
 from interview_system.services.llm_clients import get_llm
 
 
-def generate_follow_up(question_text: str, answer_text: str) -> FollowUpOutput:
+async def generate_follow_up(question_text: str, answer_text: str) -> FollowUpOutput:
     """
     Generates a follow-up question if the user's answer was incomplete.
 
@@ -23,7 +23,7 @@ def generate_follow_up(question_text: str, answer_text: str) -> FollowUpOutput:
     prompt = template.render(question_text=question_text, answer_text=answer_text)
 
     llm = get_llm(model_type="flash")  # Use Flash for a fast, conversational follow-up
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         start_index = response.content.find("{")

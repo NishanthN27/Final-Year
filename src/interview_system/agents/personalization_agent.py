@@ -7,7 +7,7 @@ from interview_system.schemas.agent_outputs import PersonalizationOutput
 from interview_system.services.llm_clients import get_llm
 
 
-def create_personalization_plan(session_state: SessionState) -> PersonalizationOutput:
+async def create_personalization_plan(session_state: SessionState) -> PersonalizationOutput:
     """
     Analyzes the full session to create a personalized plan for the next one.
 
@@ -23,7 +23,7 @@ def create_personalization_plan(session_state: SessionState) -> PersonalizationO
     prompt = template.render(session_history=session_state["question_history"])
 
     llm = get_llm(model_type="pro")  # Use Pro for insightful analysis
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         start_index = response.content.find("{")

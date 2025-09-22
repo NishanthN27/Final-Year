@@ -7,7 +7,7 @@ from interview_system.schemas.agent_outputs import JobDescriptionAnalysisOutput
 from interview_system.services.llm_clients import get_llm
 
 
-def analyze_job_description(job_desc_text: str) -> JobDescriptionAnalysisOutput:
+async def analyze_job_description(job_desc_text: str) -> JobDescriptionAnalysisOutput:
     """
     Analyzes a job description using an LLM to extract structured data.
 
@@ -22,7 +22,7 @@ def analyze_job_description(job_desc_text: str) -> JobDescriptionAnalysisOutput:
     prompt = template.render(job_desc_text=job_desc_text)
 
     llm = get_llm(model_type="pro")
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         # --- ROBUST JSON PARSING ---

@@ -7,7 +7,7 @@ from interview_system.schemas.agent_outputs import ReportGenOutput
 from interview_system.services.llm_clients import get_llm
 
 
-def generate_report(session_state: SessionState) -> ReportGenOutput:
+async def generate_report(session_state: SessionState) -> ReportGenOutput:
     """
     Generates a final HTML report for the interview session.
 
@@ -25,7 +25,7 @@ def generate_report(session_state: SessionState) -> ReportGenOutput:
     llm = get_llm(
         model_type="pro"
     )  # Use Pro for a comprehensive and well-formatted report
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         start_index = response.content.find("{")

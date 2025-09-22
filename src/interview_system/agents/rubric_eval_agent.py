@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
 from jinja2 import Environment, FileSystemLoader
 
 from interview_system.schemas.agent_outputs import RubricEvalOutput
@@ -10,7 +11,7 @@ from interview_system.services.llm_clients import get_llm
 logger = logging.getLogger(__name__)
 
 
-def rubric_eval_answer(
+async def rubric_eval_answer(
     question_text: str, answer_text: str, rubric: Dict[str, Any]
 ) -> RubricEvalOutput:
     """
@@ -44,7 +45,7 @@ def rubric_eval_answer(
 
         # 5. Invoke the model
         logger.info("Invoking RubricEvalAgent (pro model)...")
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         logger.info("RubricEvalAgent invocation complete.")
 
         # 6. Clean and parse the JSON response

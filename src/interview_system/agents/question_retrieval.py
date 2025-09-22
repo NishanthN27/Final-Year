@@ -15,7 +15,7 @@ from interview_system.services.vector_store import get_vector_store
 FALLBACK_MIN_RELEVANCE = 0.35
 
 
-def _transform_query(
+async def _transform_query(  # This is already correctly async
     resume_summary: dict | None, job_summary: dict | None, domain: str
 ) -> str:
     """
@@ -23,19 +23,15 @@ def _transform_query(
     """
     env = Environment(loader=FileSystemLoader("src/interview_system/prompts/"))
     template = env.get_template("query_transformer.j2")
-
     prompt = template.render(
-        domain=domain,  # Pass the specific domain for focus
-        resume_summary=resume_summary,
-        job_summary=job_summary,
+        domain=domain, resume_summary=resume_summary, job_summary=job_summary
     )
-
     llm = get_llm(model_type="flash")
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)  # Uses await correctly
     return response.content.strip().strip('"')
 
 
-def _make_question_conversational(
+async def _make_question_conversational(  # This must also be async
     raw_question: RawQuestionData,
 ) -> ConversationalQuestionOutput:
     """Uses a fast LLM to make a retrieved question sound more natural."""
@@ -43,14 +39,14 @@ def _make_question_conversational(
     template = env.get_template("make_question_conversational.j2")
     prompt = template.render(question_text=raw_question.text)
     llm = get_llm(model_type="flash")
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)  # Uses await correctly
     return ConversationalQuestionOutput(
         conversational_text=response.content.strip().strip('"'),
         raw_question=raw_question,
     )
 
 
-def _generate_and_present_fallback(
+async def _generate_and_present_fallback(  # This must also be async
     domain: str,
     difficulty_hint: int,
     resume_analysis: ResumeAnalysisOutput | None,
@@ -68,7 +64,7 @@ def _generate_and_present_fallback(
         last_topics=last_topics or [],
     )
     llm = get_llm(model_type="flash")
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)  # Uses await correctly
     try:
         start_index = response.content.find("{")
         end_index = response.content.rfind("}") + 1
@@ -86,7 +82,7 @@ def _generate_and_present_fallback(
         ) from exc
 
 
-def retrieve_question(
+async def retrieve_question(  # The main function must be async
     *,
     domain: str,
     resume_analysis: ResumeAnalysisOutput | dict | None = None,
@@ -95,25 +91,20 @@ def retrieve_question(
     difficulty_hint: int = 5,
     min_relevance: float = FALLBACK_MIN_RELEVANCE,
 ) -> ConversationalQuestionOutput:
-    """
-    Retrieves a question from the vector DB, making it conversational.
-    Falls back to generating a new conversational question if relevance is low.
-    """
-    # 1. Ensure we are working with Pydantic objects for consistency
     if resume_analysis and isinstance(resume_analysis, dict):
         resume_analysis = ResumeAnalysisOutput(**resume_analysis)
     if job_analysis and isinstance(job_analysis, dict):
         job_analysis = JobDescriptionAnalysisOutput(**job_analysis)
 
-    # 2. Transform the high-level context into a natural language query
-    transformed_query = _transform_query(
+    # --- THIS IS THE CRITICAL FIX ---
+    transformed_query = await _transform_query(
         resume_summary=resume_analysis.model_dump() if resume_analysis else None,
         job_summary=job_analysis.model_dump() if job_analysis else None,
         domain=domain,
     )
+    # ---------------------------------
     print(f"--- Transformed Query: {transformed_query} ---")
 
-    # 3. Build a robust filter for the vector store query
     conditions: List[Dict[str, Any]] = [
         {"domain": {"$in": [domain, f"technical:{domain}"]}}
     ]
@@ -122,24 +113,18 @@ def retrieve_question(
         conditions.append({"difficulty": {"$lte": min(10, difficulty_hint + 2)}})
     where = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
-    # 4. Query the vector store
     store = get_vector_store()
-
-    # --- THIS IS THE ONLY CHANGE YOU NEED TO MAKE ---
-    # Hardcode your desired namespace directly in the query call.
     candidates = store.query_similar(
         query_text=transformed_query,
         top_k=1,
         where=where,
-        namespace="updated-namespace",  # <-- HARDCODED FIX
+        namespace="updated-namespace",
     )
-    # ----------------------------------------------
 
     if candidates:
         best = candidates[0]
         relevance = float(best.get("relevance_score", 0.0))
         print(f"--- Best candidate relevance: {relevance} ---")
-
         if relevance >= min_relevance:
             meta = best.get("metadata", {}) or {}
             raw_question = RawQuestionData(
@@ -153,11 +138,12 @@ def retrieve_question(
                 ),
                 relevance_score=relevance,
             )
-            return _make_question_conversational(raw_question)
+            return await _make_question_conversational(
+                raw_question
+            )  # <-- Also need await here
 
-    # 5. If retrieval fails or relevance is too low, trigger the fallback
     print("--- Low relevance, triggering LLM fallback generation ---")
-    return _generate_and_present_fallback(
+    return await _generate_and_present_fallback(  # <-- And here
         domain=domain,
         difficulty_hint=difficulty_hint,
         resume_analysis=resume_analysis,

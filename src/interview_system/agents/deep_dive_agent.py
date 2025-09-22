@@ -9,7 +9,7 @@ from interview_system.schemas.agent_outputs import (
 from interview_system.services.llm_clients import get_llm
 
 
-def generate_deep_dive_question(
+async def generate_deep_dive_question(
     item_type: str, item_name: str, resume_summary: dict
 ) -> ConversationalQuestionOutput:
     """
@@ -39,7 +39,7 @@ def generate_deep_dive_question(
         prompt = template.render(skill_name=item_name)
 
     llm = get_llm(model_type="pro")
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         # Robustly find and parse the JSON object from the response

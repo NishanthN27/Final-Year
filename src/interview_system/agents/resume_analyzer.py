@@ -7,7 +7,7 @@ from interview_system.schemas.agent_outputs import ResumeAnalysisOutput
 from interview_system.services.llm_clients import get_llm
 
 
-def analyze_resume(resume_text: str) -> ResumeAnalysisOutput:
+async def analyze_resume(resume_text: str) -> ResumeAnalysisOutput:
     """
     Analyzes resume text using an LLM to extract structured data.
 
@@ -28,7 +28,7 @@ def analyze_resume(resume_text: str) -> ResumeAnalysisOutput:
     llm = get_llm(model_type="pro")
 
     # 4. Invoke the model and get the response
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     # 5. Parse the JSON response from the model
     try:
@@ -41,7 +41,7 @@ def analyze_resume(resume_text: str) -> ResumeAnalysisOutput:
 
         json_string = response.content[json_start:json_end]
         response_data = json.loads(json_string)
-        
+
     except json.JSONDecodeError as e:
         # Add the raw content to the error for better debugging
         raise ValueError(

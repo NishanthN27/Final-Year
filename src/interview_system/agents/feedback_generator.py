@@ -7,7 +7,7 @@ from interview_system.schemas.agent_outputs import FeedbackGenOutput
 from interview_system.services.llm_clients import get_llm
 
 
-def generate_feedback(
+async def generate_feedback(
     question_text: str, answer_text: str, canonical_evaluation: dict[str, Any]
 ) -> FeedbackGenOutput:
     """
@@ -31,7 +31,7 @@ def generate_feedback(
     )
 
     llm = get_llm(model_type="pro")  # Use Pro for high-quality, nuanced feedback
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         start_index = response.content.find("{")

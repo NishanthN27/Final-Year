@@ -10,7 +10,7 @@ from interview_system.services.llm_clients import get_llm
 logger = logging.getLogger(__name__)
 
 
-def fast_eval_answer(
+async def fast_eval_answer(
     question_text: str, ideal_answer_snippet: str, answer_text: str
 ) -> FastEvalOutput:
     """
@@ -41,7 +41,7 @@ def fast_eval_answer(
 
         # 4. Invoke the model
         logger.info("Invoking FastEvalAgent (flash model)...")
-        response = llm.invoke(prompt)
+        response = await llm.ainvoke(prompt)
         logger.info("FastEvalAgent invocation complete.")
 
         # 5. Clean and parse the JSON response

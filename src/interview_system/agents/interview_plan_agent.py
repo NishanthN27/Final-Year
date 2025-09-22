@@ -5,7 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from interview_system.services.llm_clients import get_llm
 
 
-def generate_interview_plan(
+async def generate_interview_plan(
     resume_summary: dict, job_summary: dict, personalization_profile: dict | None
 ) -> list[str]:
     """
@@ -31,7 +31,7 @@ def generate_interview_plan(
     )
 
     llm = get_llm(model_type="pro")  # Use Pro for strategic reasoning
-    response = llm.invoke(prompt)
+    response = await llm.ainvoke(prompt)
 
     try:
         # Use robust JSON parsing

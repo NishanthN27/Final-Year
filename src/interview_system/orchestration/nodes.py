@@ -17,22 +17,24 @@ from .state import QuestionTurn, SessionState
 logger = logging.getLogger(__name__)
 
 
-# --- Analysis & Planning Nodes (Unchanged) ---
-def analyze_resume_node(state: SessionState) -> dict:
+# --- Analysis & Planning Nodes (Now Async) ---
+async def analyze_resume_node(state: SessionState) -> dict:
     logger.info("--- Node: Analyzing Resume ---")
-    analysis_result = analyze_resume(state.get("initial_resume_text"))
+    analysis_result = await analyze_resume(state.get("initial_resume_text"))
     return {"resume_summary": analysis_result.model_dump()}
 
 
-def analyze_job_description_node(state: SessionState) -> dict:
+async def analyze_job_description_node(state: SessionState) -> dict:
     logger.info("--- Node: Analyzing Job Description ---")
-    analysis_result = analyze_job_description(state.get("initial_job_description_text"))
+    analysis_result = await analyze_job_description(
+        state.get("initial_job_description_text")
+    )
     return {"job_summary": analysis_result.model_dump()}
 
 
-def create_interview_plan_node(state: SessionState) -> dict:
+async def create_interview_plan_node(state: SessionState) -> dict:
     logger.info("--- Node: Creating Interview Plan (via Agent) ---")
-    plan = generate_interview_plan(
+    plan = await generate_interview_plan(
         resume_summary=state.get("resume_summary"),
         job_summary=state.get("job_summary"),
         personalization_profile=state.get("personalization_profile"),
@@ -41,6 +43,7 @@ def create_interview_plan_node(state: SessionState) -> dict:
     return {"interview_plan": plan}
 
 
+# This node does not call an LLM, so it can remain synchronous
 def set_current_topic_node(state: SessionState) -> dict:
     plan = state.get("interview_plan", [])
     if plan:
@@ -48,23 +51,23 @@ def set_current_topic_node(state: SessionState) -> dict:
     return {"current_topic": None}
 
 
-# --- Question Generation Nodes (Unchanged) ---
-def introduction_node(state: SessionState) -> dict:
+# --- Question Generation Nodes ---
+def introduction_node(state: SessionState) -> dict:  # No LLM call, stays sync
     logger.info("--- Node: Generating Introduction ---")
     turn = QuestionTurn(
-        conversational_text="Welcome, Candidate! Thanks for your time today. To get started, could you please tell me a bit about yourself and walk me through your resume?",
+        conversational_text="Welcome, Candidate! Let's start with an introduction. Introduce yourself and walk me through your resume.",
         raw_question_text="Tell me about yourself.",
-        ideal_answer_snippet="A concise 'elevator pitch' summarizing background, key skills, and career goals.",
+        ideal_answer_snippet="...",
     )
     return {"current_question": turn}
 
 
-def retrieve_question_node(state: SessionState) -> dict:
+async def retrieve_question_node(state: SessionState) -> dict:
     logger.info("--- Node: Retrieving Generic Question ---")
     topic = state["current_topic"]
     history = state.get("question_history", [])
     last_topics = [turn.raw_question_text for turn in history]
-    question_output = retrieve_question(
+    question_output = await retrieve_question(
         domain=topic,
         resume_analysis=state.get("resume_summary"),
         job_analysis=state.get("job_summary"),
@@ -79,14 +82,14 @@ def retrieve_question_node(state: SessionState) -> dict:
     return {"current_question": turn}
 
 
-def deep_dive_question_node(state: SessionState) -> dict:
+async def deep_dive_question_node(state: SessionState) -> dict:
     logger.info("--- Node: Generating Deep Dive Question ---")
     topic_string = state["current_topic"]
     parts = topic_string.replace("_", ":").split(":", 2)
     if len(parts) != 3:
         raise ValueError(f"Invalid deep_dive format: '{topic_string}'")
     _, item_type, item_name = parts
-    question_output = generate_deep_dive_question(
+    question_output = await generate_deep_dive_question(
         item_type=item_type,
         item_name=item_name,
         resume_summary=state.get("resume_summary"),
@@ -100,21 +103,21 @@ def deep_dive_question_node(state: SessionState) -> dict:
     return {"current_question": turn}
 
 
-def wrap_up_node(state: SessionState) -> dict:
+def wrap_up_node(state: SessionState) -> dict:  # No LLM call, stays sync
     logger.info("--- Node: Generating Wrap-up Question ---")
     turn = QuestionTurn(
-        conversational_text="That was the last question I had. Do you have any questions for me?",
+        conversational_text="That was the last question...Do you have any questions for me?",
         raw_question_text="Do you have any questions for me?",
-        ideal_answer_snippet="The candidate should ask thoughtful questions about the role, team, or company.",
+        ideal_answer_snippet="...",
     )
     return {"current_question": turn}
 
 
-# --- Evaluation & Synthesis Nodes (Unchanged) ---
-def fast_eval_node(state: SessionState) -> dict:
+# --- Evaluation & Synthesis Nodes ---
+async def fast_eval_node(state: SessionState) -> dict:
     logger.info("--- Node: Fast Evaluation ---")
     current_question = state["current_question"]
-    eval_result = fast_eval_answer(
+    eval_result = await fast_eval_answer(
         question_text=current_question.raw_question_text,
         ideal_answer_snippet=current_question.ideal_answer_snippet,
         answer_text=current_question.answer_text,
@@ -122,11 +125,11 @@ def fast_eval_node(state: SessionState) -> dict:
     return {"current_question": {"evals": {"fast_eval": eval_result.model_dump()}}}
 
 
-def rubric_eval_node(state: SessionState) -> dict:
+async def rubric_eval_node(state: SessionState) -> dict:
     logger.info("--- Node: Rubric Evaluation ---")
     current_question = state["current_question"]
     rubric = state["current_rubric"]
-    eval_result = rubric_eval_answer(
+    eval_result = await rubric_eval_answer(
         question_text=current_question.raw_question_text,
         answer_text=current_question.answer_text,
         rubric=rubric,
@@ -134,7 +137,9 @@ def rubric_eval_node(state: SessionState) -> dict:
     return {"current_question": {"evals": {"rubric_eval": eval_result.model_dump()}}}
 
 
-def evaluation_synthesizer_node(state: SessionState) -> dict[str, Any]:
+def evaluation_synthesizer_node(
+    state: SessionState,
+) -> dict[str, Any]:  # No LLM call, stays sync
     logger.info("--- Node: Synthesizing Evaluations ---")
     current_question = state["current_question"]
     fast_eval = current_question.evals.get("fast_eval", {})
@@ -150,12 +155,11 @@ def evaluation_synthesizer_node(state: SessionState) -> dict[str, Any]:
     return {"current_question": {"evals": {"canonical": canonical_eval}}}
 
 
-# --- Feedback & Follow-up Nodes (THE CORE FIX) ---
-def feedback_generator_node(state: SessionState) -> dict:
-    """This node now ONLY generates feedback. It does not advance the plan."""
+# --- Feedback & Follow-up Nodes ---
+async def feedback_generator_node(state: SessionState) -> dict:
     logger.info("--- Node: Generating Feedback ---")
     current_question = state["current_question"]
-    feedback_result = generate_feedback(
+    feedback_result = await generate_feedback(
         question_text=current_question.raw_question_text,
         answer_text=current_question.answer_text,
         canonical_evaluation=current_question.evals["canonical"],
@@ -163,68 +167,50 @@ def feedback_generator_node(state: SessionState) -> dict:
     return {"current_question": {"feedback": feedback_result.model_dump()}}
 
 
-def handle_follow_up_node(state: SessionState) -> dict:
-    """
-    This is a new, dedicated node. Its ONLY job is to generate a follow-up
-    and prepare it to be asked next.
-    """
+async def handle_follow_up_node(state: SessionState) -> dict:
     logger.info("--- Node: Handling Follow-up ---")
     current_question = state["current_question"]
-    follow_up_agent_output = generate_follow_up(
+    follow_up_agent_output = await generate_follow_up(
         question_text=current_question.raw_question_text,
         answer_text=current_question.answer_text,
     )
-
-    # --- THIS IS THE CRITICAL FIX ---
-    # Create a brand new, clean QuestionTurn object for the follow-up.
-    # It will have no 'answer_text' by default.
     follow_up_turn = QuestionTurn(
         conversational_text=follow_up_agent_output.question_text,
         raw_question_text=follow_up_agent_output.question_text,
         ideal_answer_snippet="The candidate should provide the specific information that was missing from their previous answer.",
     )
-    # --------------------------------
-
-    # We do NOT change the plan here. We just prepare the next question.
     return {"next_question_override": follow_up_turn}
 
 
-# --- Final Reporting & State Management (THE CORE FIX) ---
-def report_generator_node(state: SessionState) -> dict:
+# --- Final Reporting & State Management ---
+async def report_generator_node(state: SessionState) -> dict:
     logger.info("--- Node: Generating Final Report ---")
     serializable_state = dict(state)
     if state.get("question_history"):
         serializable_state["question_history"] = [
             turn.model_dump(mode="json") for turn in state["question_history"]
         ]
-    report_result = generate_report(serializable_state)
+    report_result = await generate_report(serializable_state)
     return {"final_report": report_result.model_dump()}
 
 
-def personalization_node(state: SessionState) -> dict:
+async def personalization_node(state: SessionState) -> dict:
     logger.info("--- Node: Creating Personalization Plan ---")
     serializable_state = dict(state)
     if state.get("question_history"):
         serializable_state["question_history"] = [
             turn.model_dump(mode="json") for turn in state["question_history"]
         ]
-    plan_result = create_personalization_plan(serializable_state)
+    plan_result = await create_personalization_plan(serializable_state)
     return {"personalization_profile": plan_result.model_dump()}
 
 
-def final_reporting_entry_node(state: SessionState) -> dict:
+def final_reporting_entry_node(state: SessionState) -> dict:  # No LLM call, stays sync
     logger.info("--- Node: Kicking off Final Reporting ---")
     return {}
 
 
 # In nodes.py
-
-
-# In nodes.py
-
-
-# In nodes.py
-
 
 def update_history_and_plan_node(state: SessionState) -> dict:
     """
@@ -232,7 +218,7 @@ def update_history_and_plan_node(state: SessionState) -> dict:
     and does not advance the main interview plan during that detour.
     """
     logger.info("--- Node: Updating History and Plan ---")
-
+    
     # 1. ALWAYS archive the question that was just answered.
     last_question = state["current_question"]
     new_history = state.get("question_history", []) + [last_question]
@@ -244,6 +230,7 @@ def update_history_and_plan_node(state: SessionState) -> dict:
     # 3. ONLY advance the plan if we are NOT handling a follow-up.
     if next_question:
         # We are on a detour. Do NOT change the main itinerary.
+        # The current topic remains the same for the follow-up.
         updated_plan = state.get("interview_plan", [])
     else:
         # We are on the main road. Proceed to the next city on the itinerary.
@@ -253,6 +240,6 @@ def update_history_and_plan_node(state: SessionState) -> dict:
     return {
         "question_history": new_history,
         "interview_plan": updated_plan,
-        "current_question": next_question,  # This is either the follow-up or None
-        "next_question_override": None,  # Clean up the temporary state
+        "current_question": next_question, # This is either the follow-up or None
+        "next_question_override": None, # Clean up the temporary state
     }
