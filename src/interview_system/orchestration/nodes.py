@@ -17,7 +17,7 @@ from .state import QuestionTurn, SessionState
 logger = logging.getLogger(__name__)
 
 
-# --- Analysis & Planning Nodes (Now Async) ---
+# --- Analysis & Planning Nodes ---
 async def analyze_resume_node(state: SessionState) -> dict:
     logger.info("--- Node: Analyzing Resume ---")
     analysis_result = await analyze_resume(state.get("initial_resume_text"))
@@ -43,7 +43,6 @@ async def create_interview_plan_node(state: SessionState) -> dict:
     return {"interview_plan": plan}
 
 
-# This node does not call an LLM, so it can remain synchronous
 def set_current_topic_node(state: SessionState) -> dict:
     plan = state.get("interview_plan", [])
     if plan:
@@ -52,12 +51,12 @@ def set_current_topic_node(state: SessionState) -> dict:
 
 
 # --- Question Generation Nodes ---
-def introduction_node(state: SessionState) -> dict:  # No LLM call, stays sync
+def introduction_node(state: SessionState) -> dict:
     logger.info("--- Node: Generating Introduction ---")
     turn = QuestionTurn(
-        conversational_text="Welcome, Candidate! Let's start with an introduction. Introduce yourself and walk me through your resume.",
+        conversational_text="Welcome, Candidate! Thanks for your time today. To get started, could you please tell me a bit about yourself and walk me through your resume?",
         raw_question_text="Tell me about yourself.",
-        ideal_answer_snippet="...",
+        ideal_answer_snippet="A concise 'elevator pitch' summarizing background, key skills, and career goals.",
     )
     return {"current_question": turn}
 
@@ -103,12 +102,12 @@ async def deep_dive_question_node(state: SessionState) -> dict:
     return {"current_question": turn}
 
 
-def wrap_up_node(state: SessionState) -> dict:  # No LLM call, stays sync
+def wrap_up_node(state: SessionState) -> dict:
     logger.info("--- Node: Generating Wrap-up Question ---")
     turn = QuestionTurn(
-        conversational_text="That was the last question...Do you have any questions for me?",
+        conversational_text="That was the last question I had. Do you have any questions for me?",
         raw_question_text="Do you have any questions for me?",
-        ideal_answer_snippet="...",
+        ideal_answer_snippet="The candidate should ask thoughtful questions about the role, team, or company.",
     )
     return {"current_question": turn}
 
@@ -137,9 +136,7 @@ async def rubric_eval_node(state: SessionState) -> dict:
     return {"current_question": {"evals": {"rubric_eval": eval_result.model_dump()}}}
 
 
-def evaluation_synthesizer_node(
-    state: SessionState,
-) -> dict[str, Any]:  # No LLM call, stays sync
+def evaluation_synthesizer_node(state: SessionState) -> dict[str, Any]:
     logger.info("--- Node: Synthesizing Evaluations ---")
     current_question = state["current_question"]
     fast_eval = current_question.evals.get("fast_eval", {})
@@ -168,18 +165,21 @@ async def feedback_generator_node(state: SessionState) -> dict:
 
 
 async def handle_follow_up_node(state: SessionState) -> dict:
-    logger.info("--- Node: Handling Follow-up ---")
-    current_question = state["current_question"]
+    logger.info("--- Node: Handling Follow-up Detour ---")
+    last_question = state["current_question"]
     follow_up_agent_output = await generate_follow_up(
-        question_text=current_question.raw_question_text,
-        answer_text=current_question.answer_text,
+        question_text=last_question.raw_question_text,
+        answer_text=last_question.answer_text,
     )
     follow_up_turn = QuestionTurn(
         conversational_text=follow_up_agent_output.question_text,
         raw_question_text=follow_up_agent_output.question_text,
-        ideal_answer_snippet="The candidate should provide the specific information that was missing from their previous answer.",
+        ideal_answer_snippet="The candidate should provide the specific information missing from their previous answer.",
     )
-    return {"next_question_override": follow_up_turn}
+    return {
+        "question_history": state.get("question_history", []) + [last_question],
+        "current_question": follow_up_turn,
+    }
 
 
 # --- Final Reporting & State Management ---
@@ -205,41 +205,18 @@ async def personalization_node(state: SessionState) -> dict:
     return {"personalization_profile": plan_result.model_dump()}
 
 
-def final_reporting_entry_node(state: SessionState) -> dict:  # No LLM call, stays sync
+def final_reporting_entry_node(state: SessionState) -> dict:
     logger.info("--- Node: Kicking off Final Reporting ---")
     return {}
 
 
-# In nodes.py
-
 def update_history_and_plan_node(state: SessionState) -> dict:
-    """
-    This node is now smarter. It knows that a follow-up is a "detour"
-    and does not advance the main interview plan during that detour.
-    """
-    logger.info("--- Node: Updating History and Plan ---")
-    
-    # 1. ALWAYS archive the question that was just answered.
+    logger.info("--- Node: Updating History and Advancing Plan ---")
     last_question = state["current_question"]
     new_history = state.get("question_history", []) + [last_question]
-
-    # 2. Check if a follow-up question was prepared in the last step.
-    next_question = state.get("next_question_override")
-
-    # --- THIS IS THE CRITICAL FIX ---
-    # 3. ONLY advance the plan if we are NOT handling a follow-up.
-    if next_question:
-        # We are on a detour. Do NOT change the main itinerary.
-        # The current topic remains the same for the follow-up.
-        updated_plan = state.get("interview_plan", [])
-    else:
-        # We are on the main road. Proceed to the next city on the itinerary.
-        updated_plan = state.get("interview_plan", [])[1:]
-    # --------------------------------
-
+    updated_plan = state.get("interview_plan", [])[1:]
     return {
         "question_history": new_history,
         "interview_plan": updated_plan,
-        "current_question": next_question, # This is either the follow-up or None
-        "next_question_override": None, # Clean up the temporary state
+        "current_question": None,
     }
