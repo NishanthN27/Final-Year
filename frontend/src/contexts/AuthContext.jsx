@@ -53,6 +53,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     setUser(null);
+    // 👇 ADD THIS LINE to redirect the user after logout
+    window.location.href = 'http://localhost:5173/';
   };
 
   // 3. Provide state and functions to children
