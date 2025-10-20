@@ -4,13 +4,12 @@ import { Send, Mic, Paperclip, X, FileText, LoaderCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import GeminiSidebar from '../components/GeminiSidebar';
 import { useTheme } from '../contexts/ThemeContext';
-import { uploadResume } from '../services/sessionApi';
+import { uploadResume, startInterview } from '../services/sessionApi';
 import ErrorMessage from '../components/ErrorMessage';
 import { useNavigate } from 'react-router-dom';
-import LoadingSpinner from '../components/LoadingSpinner'; // Import loader
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const CandidateDashboardPage = () => {
-  // Get token AND the new isLoading state, aliased to avoid conflict
   const { user, token, isLoading: isAuthLoading } = useAuth();
   const { isDark } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -21,7 +20,7 @@ const CandidateDashboardPage = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [uploadedFileUrl, setUploadedFileUrl] = useState(null);
+  const [isProcessed, setIsProcessed] = useState(false); // New state
 
   const handleTextChange = (e) => {
     setResumeText(e.target.value);
@@ -45,33 +44,46 @@ const CandidateDashboardPage = () => {
 
   const handleSubmit = async () => {
     setError(null);
-    if (!resumeFile) return;
-    
-    // --- THIS IS THE KEY FIX ---
-    // Check if the token is present *before* making the API call
     if (!token) {
-      setError("You are not logged in. Please log in again.");
-      setIsLoading(false);
+      setError("Authentication error. Please log in again.");
       return;
     }
 
+    const hasText = resumeText.trim() !== '';
+    const hasFile = resumeFile !== null;
+    if (!hasText && !hasFile) return;
+
     setIsLoading(true);
     try {
-      const response = await uploadResume(resumeFile, token);
-      console.log("Resume uploaded successfully:", response);
-      setUploadedFileUrl(response.file_url);
+      let response;
+      if (hasFile) {
+        // Flow 1: Upload file, then get text
+        const uploadResponse = await uploadResume(resumeFile, token);
+        response = await startInterview({ file_url: uploadResponse.file_url }, token);
+      } else {
+        // Flow 2: Get "processed" text (in this case, just confirm)
+        response = await startInterview({ resume_text: resumeText }, token);
+      }
+      
+      console.log("Resume processed.");
+      
+      // Set the text area to the extracted text
+      setResumeText(response.raw_text);
+      setResumeFile(null); // Clear the file input
+      setIsProcessed(true); // Mark as processed
+      
+      // TODO: Navigate to the next step
+      // navigate('/interview/session-id');
+
     } catch (err) {
-      // The error from the API will be {detail: "..."}
       setError(err.detail || "An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Disable submission if auth is loading OR an upload is in progress
-  const canSubmit = (resumeFile !== null || resumeText.trim() !== '') && !isLoading && !isAuthLoading;
+  const canSubmit = (resumeText.trim() !== '' || resumeFile !== null) && !isLoading && !isAuthLoading && !isProcessed;
 
-  // Show a full-page loader while AuthContext is checking localStorage
   if (isAuthLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-white dark:bg-slate-900">
@@ -112,13 +124,13 @@ const CandidateDashboardPage = () => {
               >
                 {error && <ErrorMessage message={error} onRetry={handleSubmit} />}
                 
-                {uploadedFileUrl && !error && (
+                {isProcessed && !error && (
                   <div className="mb-3 ml-2 p-3 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-lg text-sm font-semibold">
-                    File uploaded successfully! The interview will begin shortly.
+                    Resume processed successfully! The text is now visible below.
                   </div>
                 )}
 
-                {resumeFile && (
+                {resumeFile && !isProcessed && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -139,8 +151,9 @@ const CandidateDashboardPage = () => {
                     rows="1"
                     value={resumeText}
                     onChange={handleTextChange}
-                    disabled={!!resumeFile || isLoading || isAuthLoading}
-                    placeholder={resumeFile ? "File attached. Press the arrow to start." : "Paste resume, or upload a file..."}
+                    // Disable if loading, or if analysis is complete
+                    disabled={isLoading || isAuthLoading || isProcessed}
+                    placeholder={isProcessed ? "Resume text is loaded." : (resumeFile ? "File attached. Press the arrow to start." : "Paste resume, or upload a file...")}
                     className="w-full pl-12 pr-24 py-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none disabled:cursor-not-allowed no-scrollbar"
                     onInput={(e) => {
                       e.target.style.height = 'auto';
@@ -148,7 +161,8 @@ const CandidateDashboardPage = () => {
                     }}
                   />
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center">
-                    {!resumeText && !isLoading && !uploadedFileUrl && (
+                    {/* Hide paperclip if text is present, loading, or processed */}
+                    {!resumeText && !isLoading && !isProcessed && (
                         <>
                             <input
                                 type="file"
@@ -165,7 +179,7 @@ const CandidateDashboardPage = () => {
                     )}
                   </div>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
-                    <button className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" disabled={isLoading || isAuthLoading}>
+                    <button className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" disabled={isLoading || isAuthLoading || isProcessed}>
                       <Mic className="w-5 h-5" />
                     </button>
                     <button

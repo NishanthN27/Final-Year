@@ -63,5 +63,6 @@ src/interview_system/services/__init__.py
 src/interview_system/services/cache.py
 src/interview_system/services/cloudinary_service.py
 src/interview_system/services/llm_clients.py
+src/interview_system/services/pdf_parser.py
 src/interview_system/services/pinecone_store.py
 src/interview_system/services/vector_store.py

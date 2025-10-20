@@ -1,4 +1,6 @@
 from pydantic import BaseModel, HttpUrl
+from typing import Optional
+# No longer importing ResumeAnalysisOutput
 
 class ResumeUploadResponse(BaseModel):
     """
@@ -7,8 +9,16 @@ class ResumeUploadResponse(BaseModel):
     message: str
     file_url: HttpUrl
 
-class StartInterviewTextRequest(BaseModel):
+class StartInterviewRequest(BaseModel):
     """
-    Defines the request for starting an interview with pasted text.
+    Defines the request for starting an interview.
+    Must provide one of file_url or resume_text.
     """
-    resume_text: str
+    file_url: Optional[HttpUrl] = None
+    resume_text: Optional[str] = None
+
+class StartInterviewResponse(BaseModel):
+    """
+    Defines the response for a successful text extraction.
+    """
+    raw_text: str
