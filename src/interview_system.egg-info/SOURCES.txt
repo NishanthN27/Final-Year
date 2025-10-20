@@ -25,6 +25,7 @@ src/interview_system/api/main.py
 src/interview_system/api/routers/__init__.py
 src/interview_system/api/routers/admin.py
 src/interview_system/api/routers/interview.py
+src/interview_system/api/routers/session.py
 src/interview_system/auth/__init__.py
 src/interview_system/auth/dependencies.py
 src/interview_system/auth/jwt_utils.py
@@ -33,6 +34,7 @@ src/interview_system/auth/router.py
 src/interview_system/config/__init__.py
 src/interview_system/config/app_config.py
 src/interview_system/config/auth_config.py
+src/interview_system/config/cloudinary_config.py
 src/interview_system/config/db_config.py
 src/interview_system/config/llm_config.py
 src/interview_system/models/__init__.py
@@ -55,11 +57,11 @@ src/interview_system/repositories/user_repository.py
 src/interview_system/schemas/__init__.py
 src/interview_system/schemas/agent_outputs.py
 src/interview_system/schemas/interview.py
+src/interview_system/schemas/session.py
 src/interview_system/schemas/user.py
 src/interview_system/services/__init__.py
 src/interview_system/services/cache.py
+src/interview_system/services/cloudinary_service.py
 src/interview_system/services/llm_clients.py
 src/interview_system/services/pinecone_store.py
 src/interview_system/services/vector_store.py
-src/interview_system/src/interview_system/agents/job_description_analyzer.py
-src/src/interview_system/agents/job_description_analyzer.py

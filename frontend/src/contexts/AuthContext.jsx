@@ -7,16 +7,19 @@ const AuthContext = createContext(null);
 // 2. Create the provider component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null); // <-- ADDED THIS STATE
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Check for a token in localStorage when the app loads
     try {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        const decodedUser = jwtDecode(token);
-        // Optional: Check if the token is expired
+      const storedToken = localStorage.getItem('accessToken');
+      if (storedToken) {
+        const decodedUser = jwtDecode(storedToken);
+        
         if (decodedUser.exp * 1000 > Date.now()) {
+          // Token is valid, set both user and token
+          setToken(storedToken); // <-- ADDED THIS
           setUser({
             id: decodedUser.user_id,
             role: decodedUser.role,
@@ -25,6 +28,7 @@ export const AuthProvider = ({ children }) => {
           // Token is expired, remove it
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+          setToken(null); // <-- ADDED THIS
         }
       }
     } catch (error) {
@@ -39,6 +43,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const decodedUser = jwtDecode(accessToken);
       localStorage.setItem('accessToken', accessToken);
+      setToken(accessToken); // <-- ADDED THIS
       setUser({
         id: decodedUser.user_id,
         role: decodedUser.role,
@@ -53,13 +58,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     setUser(null);
-    // 👇 ADD THIS LINE to redirect the user after logout
+    setToken(null); // <-- ADDED THIS
     window.location.href = 'http://localhost:5173/';
   };
 
   // 3. Provide state and functions to children
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    // --- ADD 'token' TO THE VALUE ---
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
