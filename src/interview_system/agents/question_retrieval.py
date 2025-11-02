@@ -105,10 +105,8 @@ async def retrieve_question(  # The main function must be async
     # ---------------------------------
     print(f"--- Transformed Query: {transformed_query} ---")
 
-    domain_regex = f".*[-:]?{domain}$"
-
     conditions: List[Dict[str, Any]] = [
-        {"domain": {"$regex": domain_regex}}
+        {"domain": {"$in": [domain, f"technical:{domain}", f"technical-{domain}"]}}
     ]
     if difficulty_hint is not None:
         conditions.append({"difficulty": {"$gte": max(1, difficulty_hint - 2)}})
