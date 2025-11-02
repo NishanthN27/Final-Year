@@ -1,5 +1,6 @@
 import uuid
 import logging
+from typing import Any  # <-- 1. Import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from langgraph.checkpoint.memory import MemorySaver
@@ -45,6 +46,13 @@ class AnswerResponse(BaseModel):
     feedback: dict | None
     next_question: dict | None
     is_finished: bool
+
+# --- 2. ADD NEW RESPONSE MODEL FOR THE REPORT ---
+class ReportResponse(BaseModel):
+    """What we send back for the final report."""
+    session_id: str
+    final_report: dict | None
+    personalization_profile: dict | None
 
 # --- API Endpoints ---
 
@@ -146,13 +154,46 @@ async def submit_answer(
         is_finished = not new_state.values.get("interview_plan")
         
         return AnswerResponse(
-            # --- THIS IS THE FIX ---
-            # 'last_turn.feedback' is already a dict, so we just pass it directly.
             feedback=last_turn.feedback if last_turn and last_turn.feedback else None,
-            # --- END FIX ---
             next_question=next_question.model_dump() if next_question else None,
             is_finished=is_finished
         )
     except Exception as e:
         logger.error(f"Error processing answer for session {request.session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An error occurred while processing your answer.")
+
+
+# --- 3. ADD NEW ENDPOINT TO FETCH THE REPORT ---
+@router.get("/report/{session_id}", response_model=ReportResponse)
+async def get_report(
+    session_id: str,
+    # current_user: User = Depends(get_current_user) # Uncomment to get the logged-in user
+):
+    """
+    Retrieves the final report for a completed interview session.
+    """
+    logger.info(f"--- API: Fetching report for session {session_id} ---")
+    config = {"configurable": {"thread_id": session_id}}
+
+    try:
+        # Get the final state from the checkpointer
+        final_state = await graph.aget_state(config)
+        
+        if not final_state:
+            raise HTTPException(status_code=404, detail="Session not found.")
+            
+        report = final_state.values.get("final_report")
+        profile = final_state.values.get("personalization_profile")
+
+        if not report:
+            logger.warning(f"Session {session_id}: Report not found or not yet generated.")
+            raise HTTPException(status_code=404, detail="Report not yet available.")
+
+        return ReportResponse(
+            session_id=session_id,
+            final_report=report,
+            personalization_profile=profile
+        )
+    except Exception as e:
+        logger.error(f"Error fetching report for session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred while fetching the report.")
