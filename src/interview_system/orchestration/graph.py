@@ -1,132 +1,166 @@
-from langgraph.graph import END, START, StateGraph
+# src/interview_system/orchestration/graph.py
 
+import logging
+from langgraph.graph import StateGraph, END
+from .state import SessionState, QuestionTurn
 from .nodes import (
-    analyze_job_description_node,
+    analyze_job_node,
     analyze_resume_node,
     create_interview_plan_node,
-    deep_dive_question_node,
-    evaluation_synthesizer_node,
+    deep_dive_node,
     fast_eval_node,
-    feedback_generator_node,
+    feedback_generation_node,
     final_reporting_entry_node,
-    handle_follow_up_node,
-    introduction_node,
+    follow_up_node,
+    merge_evaluations_node,
     personalization_node,
+    question_retrieval_node,
     report_generator_node,
-    retrieve_question_node,
     rubric_eval_node,
-    set_current_topic_node,
     update_history_and_plan_node,
-    wrap_up_node,
+    save_personalization_node
 )
-from .state import SessionState
+# --- WE REMOVED THE BROKEN 'from .routing import ...' LINE ---
 
+logger = logging.getLogger(__name__)
 
-def route_to_questioner(state: SessionState) -> str:
-    topic = state.get("current_topic")
-    if not topic or not state.get("interview_plan"):
-        return "generate_report_and_plan"
-    if topic == "introduction":
-        return "introduction"
-    if "deep_dive" in topic:
+# --- 1. ADD THE MISSING ROUTING FUNCTIONS ---
+
+def route_to_final_reporting(state: SessionState) -> str:
+    """
+    Router that decides whether to continue the interview or move to final reporting.
+    """
+    if not state.get("interview_plan"):
+        logger.info("--- Router: Interview plan is empty. Ending interview. ---")
+        return "end_interview"
+    else:
+        logger.info("--- Router: Interview plan has items. Continuing. ---")
+        return "continue_interview"
+
+def route_to_deep_dive_or_retrieval(state: SessionState) -> str:
+    """
+    Router that decides whether to retrieve a question or generate a deep dive.
+    """
+    # This assumes we've just advanced the plan in update_history_and_plan
+    # so the *next* question is at plan[0]
+    next_topic = state.get("interview_plan", [])[0]
+    
+    if next_topic.startswith("deep_dive:"):
+        logger.info(f"--- Router: Detected 'deep_dive' topic. ---")
         return "deep_dive"
-    if topic == "wrap_up":
-        return "wrap_up"
-    return "retrieve"
-
-
-def route_after_question_is_answered(state: SessionState) -> str:
-    if state.get("current_question") and state.get("current_question").answer_text:
-        return "run_evaluation"
     else:
-        return END
+        logger.info(f"--- Router: Standard topic. Retrieving question. ---")
+        return "retrieve_question"
 
-
-def route_after_evaluation(state: SessionState) -> str:
-    canonical_eval = state.get("current_question", {}).evals.get("canonical", {})
-    if (
-        canonical_eval.get("user_input_needed", False)
-        and canonical_eval.get("final_score", 100) < 60
-    ):
-        return "handle_follow_up"
+def route_to_follow_up_or_next_question(state: SessionState) -> str:
+    """
+    Router that decides whether to ask the generated follow-up
+    or proceed to the next question.
+    """
+    if state.get("follow_up_question"):
+        logger.info("--- Router: Follow-up question generated. Pausing. ---")
+        return "request_follow_up"
     else:
-        return "generate_feedback"
+        logger.info("--- Router: No follow-up needed. Proceeding to next question. ---")
+        return "proceed_to_next"
+
+# --- END OF NEW FUNCTIONS ---
 
 
-workflow = StateGraph(SessionState)
+def get_interview_graph() -> StateGraph:
+    """
+    Builds the LangGraph state machine for the interview process.
+    """
+    workflow = StateGraph(SessionState)
 
-# Add Nodes
-workflow.add_node("analyze_resume", analyze_resume_node)
-workflow.add_node("analyze_job_description", analyze_job_description_node)
-workflow.add_node("plan_creator", create_interview_plan_node)
-workflow.add_node("topic_setter", set_current_topic_node)
-workflow.add_node("introduction_questioner", introduction_node)
-workflow.add_node("question_retriever", retrieve_question_node)
-workflow.add_node("deep_dive_questioner", deep_dive_question_node)
-workflow.add_node("wrap_up_questioner", wrap_up_node)
-workflow.add_node("run_evaluation", lambda state: {})
-workflow.add_node("fast_evaluator", fast_eval_node)
-workflow.add_node("rubric_evaluator", rubric_eval_node)
-workflow.add_node("evaluation_synthesizer", evaluation_synthesizer_node)
-workflow.add_node("feedback_generator", feedback_generator_node)
-workflow.add_node("handle_follow_up", handle_follow_up_node)
-workflow.add_node("state_updater", update_history_and_plan_node)
-workflow.add_node("report_generator", report_generator_node)
-workflow.add_node("personalization_planner", personalization_node)
-workflow.add_node("final_reporting_entry", final_reporting_entry_node)
+    # --- Add all nodes to the graph ---
+    workflow.add_node("analyze_resume", analyze_resume_node)
+    workflow.add_node("analyze_job", analyze_job_node)
+    workflow.add_node("create_interview_plan", create_interview_plan_node)
+    workflow.add_node("question_retrieval", question_retrieval_node)
+    workflow.add_node("deep_dive_question", deep_dive_node)
+    workflow.add_node("fast_eval", fast_eval_node)
+    workflow.add_node("rubric_eval", rubric_eval_node)
+    workflow.add_node("merge_evaluations", merge_evaluations_node)
+    workflow.add_node("feedback_generation", feedback_generation_node)
+    workflow.add_node("follow_up_generation", follow_up_node)
+    workflow.add_node("update_history_and_plan", update_history_and_plan_node)
+    workflow.add_node("final_reporting_entry", final_reporting_entry_node)
+    workflow.add_node("report_generator", report_generator_node)
+    workflow.add_node("personalization_node", personalization_node)
+    workflow.add_node("save_profile", save_personalization_node)
+    
+    # --- 2. ADD A NEW NODE FOR THE QUESTION ROUTER ---
+    # This node just helps visualize the decision point
+    workflow.add_node("question_router", lambda x: x)
 
-# Define Edges
-workflow.add_edge(START, "analyze_resume")
-workflow.add_edge(START, "analyze_job_description")
-workflow.add_edge("analyze_resume", "plan_creator")
-workflow.add_edge("analyze_job_description", "plan_creator")
-workflow.add_edge("plan_creator", "topic_setter")
 
-workflow.add_conditional_edges(
-    "topic_setter",
-    route_to_questioner,
-    {
-        "introduction": "introduction_questioner",
-        "deep_dive": "deep_dive_questioner",
-        "retrieve": "question_retriever",
-        "wrap_up": "wrap_up_questioner",
-        "generate_report_and_plan": "final_reporting_entry",
-    },
-)
+    # --- Define all edges and routing ---
 
-for node in [
-    "introduction_questioner",
-    "question_retriever",
-    "deep_dive_questioner",
-    "wrap_up_questioner",
-]:
-    workflow.add_conditional_edges(node, route_after_question_is_answered)
+    # 1. Start: Analyze Resume and Job Description (in parallel)
+    workflow.set_entry_point("analyze_resume")
+    workflow.add_edge("analyze_resume", "analyze_job")
+    
+    # 2. After analysis, create the interview plan
+    workflow.add_edge("analyze_job", "create_interview_plan")
 
-workflow.add_edge("run_evaluation", "fast_evaluator")
-workflow.add_edge("run_evaluation", "rubric_evaluator")
-workflow.add_edge("fast_evaluator", "evaluation_synthesizer")
-workflow.add_edge("rubric_evaluator", "evaluation_synthesizer")
+    # 3. From plan, go to the update node (which acts as the loop start)
+    workflow.add_edge("create_interview_plan", "update_history_and_plan")
 
-workflow.add_conditional_edges(
-    "evaluation_synthesizer",
-    route_after_evaluation,
-    {
-        "generate_feedback": "feedback_generator",
-        "handle_follow_up": "handle_follow_up",
-    },
-)
+    # 4. Main interview loop
+    workflow.add_conditional_edges(
+        "update_history_and_plan",
+        route_to_final_reporting,
+        {
+            "continue_interview": "question_router",
+            "end_interview": "final_reporting_entry"
+        }
+    )
 
-# Path A: The "Highway" (Normal Turn)
-workflow.add_edge("feedback_generator", "state_updater")
-workflow.add_edge("state_updater", "topic_setter")  # Main Loop
+    # 5. Question Router: Decide between RAG or Deep Dive
+    workflow.add_conditional_edges(
+        "question_router",
+        route_to_deep_dive_or_retrieval,
+        {
+            "retrieve_question": "question_retrieval",
+            "deep_dive": "deep_dive_question"
+        }
+    )
+    
+    # 6. Evaluation Flow (starts after API gets answer)
+    # The API will reinvoke the graph starting at "fast_eval"
+    workflow.add_edge("question_retrieval", END) # Pause for user answer
+    workflow.add_edge("deep_dive_question", END) # Pause for user answer
 
-# Path B: The "Detour" (Follow-up Turn)
-workflow.add_conditional_edges("handle_follow_up", route_after_question_is_answered)
+    workflow.add_edge("fast_eval", "rubric_eval")
+    workflow.add_edge("rubric_eval", "merge_evaluations")
+    workflow.add_edge("merge_evaluations", "feedback_generation")
+    workflow.add_edge("feedback_generation", "follow_up_generation")
 
-# Final Reporting Path
-workflow.add_edge("final_reporting_entry", "report_generator")
-workflow.add_edge("final_reporting_entry", "personalization_planner")
-workflow.add_edge("report_generator", END)
-workflow.add_edge("personalization_planner", END)
+    # 7. Follow-up router
+    workflow.add_conditional_edges(
+        "follow_up_generation",
+        route_to_follow_up_or_next_question,
+        {
+            "request_follow_up": END, # Pauses for follow-up answer
+            "proceed_to_next": "update_history_and_plan" # Loops back
+        }
+    )
 
-app = workflow.compile()
+    # 8. Final Reporting (Parallel)
+    workflow.add_edge("final_reporting_entry", "personalization_node")
+    workflow.add_edge("final_reporting_entry", "report_generator") # 3. Fix typo: was generator_node
+
+    # 9. End States
+    workflow.add_edge("report_generator", END) # 3. Fix typo: was generator_node
+    
+    workflow.add_edge("personalization_node", "save_profile")
+    workflow.add_edge("save_profile", END)
+
+    return workflow.compile()
+
+# This part is for visualization, no change needed
+if __name__ == "__main__":
+    graph = get_interview_graph()
+    # You can visualize this graph
+    # graph.get_graph().print_ascii()
