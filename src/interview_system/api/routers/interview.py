@@ -1,199 +1,172 @@
-import uuid
-import logging
-from typing import Any  # <-- 1. Import Any
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from langgraph.checkpoint.memory import MemorySaver
+# src/interview_system/api/routers/interview.py
 
-# Import your graph, state, and auth dependencies
-from ...orchestration.graph import workflow
-from ...orchestration.state import SessionState, QuestionTurn
+import logging
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ...schemas.session import (
+    StartInterviewRequest,
+    StartInterviewResponse,
+    SubmitAnswerRequest,
+    SubmitAnswerResponse,
+)
+from ...services.pdf_parser import extract_text_from_pdf_url
+from ...orchestration.graph import get_interview_graph
+from ...orchestration.state import SessionState
 from ...auth.dependencies import get_current_user
-from ...models.user import User # Assuming this is your User model path
+from ...repositories.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
 
-# This is the router you already have
+# --- ADD THE PREFIX AND TAGS ---
+# This works with main.py to create the /api/interview path
 router = APIRouter(
     prefix="/interview",
-    tags=["Interview"],
-    # dependencies=[Depends(get_current_user)] # Uncomment this line to protect all routes
+    tags=["Interview"]
 )
+# --- END OF FIX ---
 
-# --- Checkpointer and Graph Setup ---
-checkpointer = MemorySaver()
-graph = workflow.compile(checkpointer=checkpointer)
 
-# --- Pydantic Models for API Data ---
-
-class StartRequest(BaseModel):
-    """Data needed to start an interview."""
-    resume_text: str
-    job_description_text: str
-
-class StartResponse(BaseModel):
-    """What we send back when an interview starts."""
-    session_id: str
-    first_question: dict # Send the question as a JSON-friendly dict
-
-class AnswerRequest(BaseModel):
-    """Data needed to submit an answer."""
-    session_id: str
-    answer_text: str
-
-class AnswerResponse(BaseModel):
-    """What we send back after an answer is submitted."""
-    feedback: dict | None
-    next_question: dict | None
-    is_finished: bool
-
-# --- 2. ADD NEW RESPONSE MODEL FOR THE REPORT ---
-class ReportResponse(BaseModel):
-    """What we send back for the final report."""
-    session_id: str
-    final_report: dict | None
-    personalization_profile: dict | None
-
-# --- API Endpoints ---
-
-@router.post("/start", response_model=StartResponse)
-async def start_interview(
-    request: StartRequest,
-    # current_user: User = Depends(get_current_user) # Uncomment to get the logged-in user
+@router.post(
+    "/sessions",
+    response_model=StartInterviewResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a new interview session",
+)
+async def create_new_interview_session(
+    request: StartInterviewRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Starts a new interview session.
-    Analyzes docs, creates a plan, and returns the first question.
+    This endpoint parses the resume, creates an initial state,
+    and invokes the graph to get the first question.
     """
-    logger.info("--- API: Starting new interview session ---")
-    session_id = str(uuid.uuid4())
-    config = {"configurable": {"thread_id": session_id}}
+    logger.info("--- Endpoint: Creating New Interview Session ---")
+    user_id_str = current_user.get("user_id")
+    if not user_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate user credentials",
+        )
     
-    # This is the initial state, based on your interactive_interview.py
-    initial_state = {
-        "session_id": session_id,
-        "user_id": str(uuid.uuid4()), # TODO: Replace with current_user.id if using auth
-        "namespace": "updated-namespace", # Or get from user/request
-        "initial_resume_text": request.resume_text,
-        "initial_job_description_text": request.job_description_text,
-        "question_history": [],
-        "resume_summary": None,
-        "job_summary": None,
-        "current_question": None,
-        "personalization_profile": None,
-        "current_rubric": None,
-        "interview_plan": [],
-        "final_report": None,
-        "current_topic": None,
-    }
+    user_id = uuid.UUID(user_id_str)
 
+    # 1. Get Resume Text
+    resume_text = ""
+    if request.file_url:
+        try:
+            resume_text = await extract_text_from_pdf_url(str(request.file_url))
+            logger.info(f"Successfully parsed PDF for user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to parse PDF from URL: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to parse PDF from the provided URL.",
+            )
+    elif request.resume_text:
+        resume_text = request.resume_text
+    else:
+        logger.warning(f"No resume provided for new session by user {user_id}")
+        # We can proceed without a resume, the agent will handle it
+
+    # 2. --- THIS IS THE PERSONALIZATION LOGIC ---
+    # Fetch the user's *previous* personalization profile
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(user_id)
+    
+    previous_profile = user.personalization_profile if user else None
+    if previous_profile:
+        logger.info(f"Loaded previous personalization profile for user {user_id}")
+    else:
+        logger.info(f"No previous profile found for user {user_id}. Starting fresh.")
+    # --- END NEW LOGIC ---
+
+    # 3. Create the initial state for the graph
+    initial_state = SessionState(
+        session_id=uuid.uuid4(),
+        user_id=user_id,
+        initial_resume_text=resume_text,
+        initial_job_description_text=request.job_description,
+        
+        # Inject the loaded profile
+        personalization_profile=previous_profile,
+        
+        # Initialize all other fields
+        resume_summary=None,
+        job_summary=None,
+        interview_plan=[],
+        interview_plan_context=None,
+        question_history=[],
+        current_question=None,
+        follow_up_question=None,
+        final_report=None,
+    )
+
+    # 4. Invoke the graph to get the first question
     try:
-        # Run the graph until the first question is generated
-        async for _ in graph.astream(initial_state, config=config):
-            pass 
-
-        current_state = await graph.aget_state(config)
-        first_question: QuestionTurn | None = current_state.values.get("current_question")
+        graph = get_interview_graph()
+        # This runs analyze_resume, analyze_job, create_interview_plan, etc.
+        final_state = await graph.ainvoke(initial_state) 
+        
+        first_question = final_state.get("current_question")
 
         if not first_question:
-            logger.error(f"Session {session_id}: Failed to generate first question.")
-            raise HTTPException(status_code=500, detail="Failed to generate first question.")
+            logger.error("Graph finished without generating a first question.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate the first interview question.",
+            )
 
-        return StartResponse(
-            session_id=session_id,
-            first_question=first_question.model_dump()
+        # TODO: Persist the initial session state to your 'sessions' table here
+        
+        return StartInterviewResponse(
+            session_id=str(final_state["session_id"]),
+            first_question=first_question.conversational_text,
         )
+
     except Exception as e:
-        logger.error(f"Error starting interview: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while starting the interview.")
+        logger.error(f"Error during initial graph invocation: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while starting the interview.",
+        )
 
 
-@router.post("/answer", response_model=AnswerResponse)
+@router.post(
+    "/sessions/{session_id}/answer",
+    response_model=SubmitAnswerResponse,
+    summary="Submit an answer to the current question",
+)
 async def submit_answer(
-    request: AnswerRequest,
-    # current_user: User = Depends(get_current_user) # Uncomment to get the logged-in user
-):
-    """
-    Submits an answer and gets feedback + the next question.
-    """
-    logger.info(f"--- API: Receiving answer for session {request.session_id} ---")
-    config = {"configurable": {"thread_id": request.session_id}}
-
-    try:
-        # 1. Get the current state
-        current_state = await graph.aget_state(config)
-        
-        current_question: QuestionTurn | None = current_state.values.get("current_question")
-        
-        if not current_question:
-            logger.warning(f"Session {request.session_id}: No current question found. Maybe session ended?")
-            raise HTTPException(status_code=404, detail="Session not found or question not ready.")
-        
-        # 2. Update the state with the user's answer
-        current_question.answer_text = request.answer_text
-        await graph.aupdate_state(
-            config,
-            {
-                "current_question": current_question.model_dump(),
-                "current_rubric": {}, # Reset rubric for next eval
-            },
-        )
-
-        # 3. Resume the graph
-        async for _ in graph.astream(None, config=config):
-            pass # Run to the next pause
-
-        # 4. Get the *new* state and prepare the response
-        new_state = await graph.aget_state(config)
-        
-        last_turn_history: list[QuestionTurn] = new_state.values.get("question_history", [])
-        last_turn = last_turn_history[-1] if last_turn_history else None
-        
-        next_question: QuestionTurn | None = new_state.values.get("current_question")
-        
-        is_finished = not new_state.values.get("interview_plan")
-        
-        return AnswerResponse(
-            feedback=last_turn.feedback if last_turn and last_turn.feedback else None,
-            next_question=next_question.model_dump() if next_question else None,
-            is_finished=is_finished
-        )
-    except Exception as e:
-        logger.error(f"Error processing answer for session {request.session_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while processing your answer.")
-
-
-# --- 3. ADD NEW ENDPOINT TO FETCH THE REPORT ---
-@router.get("/report/{session_id}", response_model=ReportResponse)
-async def get_report(
     session_id: str,
-    # current_user: User = Depends(get_current_user) # Uncomment to get the logged-in user
+    request: SubmitAnswerRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """
-    Retrieves the final report for a completed interview session.
+    Submits the candidate's answer to the current question and
+    runs the evaluation and feedback loop.
     """
-    logger.info(f"--- API: Fetching report for session {session_id} ---")
-    config = {"configurable": {"thread_id": session_id}}
+    logger.info(f"--- Endpoint: Submitting Answer for Session {session_id} ---")
+    
+    # TODO: Retrieve the session's current state from your 'sessions' table
+    # For now, this logic is incomplete as it depends on session persistence
+    
+    # This is a conceptual example. You would load the state.
+    # current_state = load_session_state(session_id, db)
+    
+    # current_state["current_question"].answer_text = request.answer_text
+    
+    # graph = get_interview_graph()
+    
+    # final_state = await graph.ainvoke(current_state, config={"callable": "fast_eval"})
 
-    try:
-        # Get the final state from the checkpointer
-        final_state = await graph.aget_state(config)
-        
-        if not final_state:
-            raise HTTPException(status_code=404, detail="Session not found.")
-            
-        report = final_state.values.get("final_report")
-        profile = final_state.values.get("personalization_profile")
-
-        if not report:
-            logger.warning(f"Session {session_id}: Report not found or not yet generated.")
-            raise HTTPException(status_code=404, detail="Report not yet available.")
-
-        return ReportResponse(
-            session_id=session_id,
-            final_report=report,
-            personalization_profile=profile
-        )
-    except Exception as e:
-        logger.error(f"Error fetching report for session {session_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while fetching the report.")
+    # This is a placeholder response
+    return SubmitAnswerResponse(
+        feedback="Your answer has been received.",
+        next_question="This is a placeholder for the next question.",
+    )
