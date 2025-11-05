@@ -96,39 +96,73 @@ async def retrieve_question(  # The main function must be async
     if job_analysis and isinstance(job_analysis, dict):
         job_analysis = JobDescriptionAnalysisOutput(**job_analysis)
 
-    # --- THIS IS THE CRITICAL FIX ---
     transformed_query = await _transform_query(
         resume_summary=resume_analysis.model_dump() if resume_analysis else None,
         job_summary=job_analysis.model_dump() if job_analysis else None,
         domain=domain,
     )
-    # ---------------------------------
     print(f"--- Transformed Query: {transformed_query} ---")
 
-    conditions: List[Dict[str, Any]] = [
-        {"domain": {"$in": [domain, f"technical:{domain}", f"technical-{domain}"]}}
-    ]
+    # --- START OF PYTHON FILTERING FIX ---
+
+    # 1. Build a filter *only* for difficulty.
+    # The domain filter is removed from here.
+    difficulty_conditions: List[Dict[str, Any]] = []
     if difficulty_hint is not None:
-        conditions.append({"difficulty": {"$gte": max(1, difficulty_hint - 2)}})
-        conditions.append({"difficulty": {"$lte": min(10, difficulty_hint + 2)}})
-    where = {"$and": conditions} if len(conditions) > 1 else conditions[0]
+        difficulty_conditions.append(
+            {"difficulty": {"$gte": max(1, difficulty_hint - 2)}}
+        )
+        difficulty_conditions.append(
+            {"difficulty": {"$lte": min(10, difficulty_hint + 2)}}
+        )
+
+    # Create a 'where' clause that might be empty or only contain difficulty
+    where = (
+        {"$and": difficulty_conditions}
+        if len(difficulty_conditions) > 1
+        else (difficulty_conditions[0] if difficulty_conditions else {})
+    )
 
     store = get_vector_store()
+
+    # 2. Fetch *more* candidates to create a pool to filter from
     candidates = store.query_similar(
         query_text=transformed_query,
-        top_k=1,
+        top_k=5,  # Fetch 5 candidates
         where=where,
         namespace="updated-namespace",
     )
 
+    best_match = None
+
     if candidates:
-        best = candidates[0]
-        relevance = float(best.get("relevance_score", 0.0))
+        # 3. Filter the results in Python
+        for candidate in candidates:
+            meta = candidate.get("metadata", {}) or {}
+            meta_domain = str(meta.get("domain", "")).strip()
+
+            # This is the robust check:
+            # Does the domain match exactly? (e.g., "machine-learning")
+            # OR does it end with a prefix? (e.g., "technical-machine-learning")
+            is_match = (
+                meta_domain == domain
+                or meta_domain.endswith(f"-{domain}")
+                or meta_domain.endswith(f":{domain}")
+            )
+
+            if is_match:
+                best_match = candidate
+                break  # Found the best, most relevant match
+
+    # 4. Now, check if we found a valid match
+    if best_match:
+        relevance = float(best_match.get("relevance_score", 0.0))
         print(f"--- Best candidate relevance: {relevance} ---")
+
         if relevance >= min_relevance:
-            meta = best.get("metadata", {}) or {}
+            meta = best_match.get("metadata", {}) or {}
             raw_question = RawQuestionData(
-                question_id=str(best.get("id")) if best.get("id") else None,
+                question_id=str(best_match.get("id")) if best_match.get("id") else None,
                 text=str(meta.get("text", "")),
                 domain=str(meta.get("domain", domain)),
                 difficulty=int(meta.get("difficulty", difficulty_hint)),
@@ -138,12 +172,13 @@ async def retrieve_question(  # The main function must be async
                 ),
                 relevance_score=relevance,
             )
-            return await _make_question_conversational(
-                raw_question
-            )  # <-- Also need await here
+            return await _make_question_conversational(raw_question)
 
-    print("--- Low relevance, triggering LLM fallback generation ---")
-    return await _generate_and_present_fallback(  # <-- And here
+    # 5. If best_match was None OR relevance was too low, trigger fallback
+    print(
+        "--- Low relevance or no matching domain, triggering LLM fallback generation ---"
+    )
+    return await _generate_and_present_fallback(
         domain=domain,
         difficulty_hint=difficulty_hint,
         resume_analysis=resume_analysis,
