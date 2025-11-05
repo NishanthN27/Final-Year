@@ -68,15 +68,17 @@ async def retrieve_question_node(state: SessionState) -> dict:
     topic = state["current_topic"]
     history = state.get("question_history", [])
     last_topics = [turn.raw_question_text for turn in history]
-    
+
     # This is the fix: pass arguments as keywords, not a single dict
     question_output = await retrieve_question(
         domain=topic,
         resume_analysis=state.get("resume_summary"),
         job_analysis=state.get("job_summary"),
         last_topics=last_topics,
+        # --- ADD THIS LINE BACK ---
+        difficulty_hint=state.get("difficulty_hint", 5),  # Uses 5 as a default
     )
-    
+
     turn = QuestionTurn(
         question_id=question_output.raw_question.question_id,
         conversational_text=question_output.conversational_text,
@@ -132,15 +134,24 @@ async def fast_eval_node(state: SessionState) -> dict:
 async def rubric_eval_node(state: SessionState) -> dict:
     logger.info("--- Node: Rubric Evaluation ---")
     current_question = state["current_question"]
-    
+
     # You will need to implement logic to fetch the correct rubric
     # This is a placeholder default.
-    rubric = state.get("current_rubric", {
-        "criteria": [
-            {"name": "Clarity", "description": "Was the answer clear and easy to understand?"},
-            {"name": "Correctness", "description": "Was the answer technically correct?"}
-        ]
-    })
+    rubric = state.get(
+        "current_rubric",
+        {
+            "criteria": [
+                {
+                    "name": "Clarity",
+                    "description": "Was the answer clear and easy to understand?",
+                },
+                {
+                    "name": "Correctness",
+                    "description": "Was the answer technically correct?",
+                },
+            ]
+        },
+    )
 
     eval_result = await rubric_eval_answer(
         question_text=current_question.raw_question_text,
@@ -155,7 +166,7 @@ def evaluation_synthesizer_node(state: SessionState) -> dict[str, Any]:
     current_question = state["current_question"]
     fast_eval = current_question.evals.get("fast_eval", {})
     rubric_eval = current_question.evals.get("rubric_eval", {})
-    
+
     fast_score = fast_eval.get("score", 0)
     rubric_score = rubric_eval.get("aggregate_score", 0)
 
@@ -170,7 +181,7 @@ def evaluation_synthesizer_node(state: SessionState) -> dict[str, Any]:
         "final_score": round(canonical_score_100, 1),
         "user_input_needed": rubric_eval.get("user_input_needed", False),
         "full_rubric": rubric_eval,
-        "fast_summary": fast_eval.get("quick_summary", "")
+        "fast_summary": fast_eval.get("quick_summary", ""),
     }
     return {"current_question": {"evals": {"canonical": canonical_eval}}}
 
@@ -180,10 +191,10 @@ async def feedback_generator_node(state: SessionState) -> dict:
     logger.info("--- Node: Generating Feedback ---")
     current_question = state["current_question"]
     canonical_eval = current_question.evals.get("canonical")
-    
+
     if not canonical_eval:
-         logger.error("Cannot generate feedback, canonical evaluation is missing.")
-         return {}
+        logger.error("Cannot generate feedback, canonical evaluation is missing.")
+        return {}
 
     feedback_result = await generate_feedback(
         question_text=current_question.raw_question_text,
@@ -200,14 +211,14 @@ async def handle_follow_up_node(state: SessionState) -> dict:
         question_text=last_question.raw_question_text,
         answer_text=last_question.answer_text,
     )
-    
+
     # Create a new QuestionTurn for the follow-up
     follow_up_turn = QuestionTurn(
         conversational_text=follow_up_agent_output.question_text,
         raw_question_text=follow_up_agent_output.question_text,
         ideal_answer_snippet="The candidate should provide the specific information missing from their previous answer.",
     )
-    
+
     # Add the *last* question to history, and set the *new* follow-up as current
     return {
         "question_history": state.get("question_history", []) + [last_question],
@@ -223,16 +234,16 @@ async def report_generator_node(state: SessionState) -> dict:
         serializable_state["question_history"] = [
             turn.model_dump(mode="json") for turn in state["question_history"]
         ]
-    
+
     try:
         report_result = await generate_report(serializable_state)
-        
+
         if report_result:
             return {"final_report": report_result.model_dump()}
         else:
             logger.error("Report generation returned None.")
             return {"final_report": None}
-            
+
     except Exception as e:
         logger.error(f"Report generation node failed: {e}", exc_info=True)
         return {"final_report": None}
@@ -260,12 +271,14 @@ def update_history_and_plan_node(state: SessionState) -> dict:
     last_question = state["current_question"]
     new_history = state.get("question_history", []) + [last_question]
     updated_plan = state.get("interview_plan", [])[1:]
-    
+
     return {
         "question_history": new_history,
         "interview_plan": updated_plan,
-        "current_question": None, # Clear the current question
+        "current_question": None,  # Clear the current question
     }
+
+
 async def save_personalization_node(state: SessionState) -> dict:
     """
     Saves the personalization_profile to the user's DB record.
@@ -273,7 +286,7 @@ async def save_personalization_node(state: SessionState) -> dict:
     """
     logger.info("--- Node: Saving Personalization Profile ---")
     profile = state.get("personalization_profile")
-    user_id = state.get("user_id") # Make sure user_id is in your state!
+    user_id = state.get("user_id")  # Make sure user_id is in your state!
 
     if profile and user_id:
         try:
@@ -285,5 +298,5 @@ async def save_personalization_node(state: SessionState) -> dict:
         except Exception as e:
             logger.error(f"Failed to save personalization profile: {e}", exc_info=True)
             # Don't crash the graph, just log the error
-    
-    return {} # This node doesn't modify the graph state
+
+    return {}  # This node doesn't modify the graph state
