@@ -32,11 +32,10 @@ const ChatBubble = ({ message }) => {
   return (
     <div className={`flex ${isBot ? 'justify-start' : 'justify-end'} my-2`}>
       <div
-        className={`p-3 rounded-2xl max-w-lg ${
-          isBot
+        className={`p-3 rounded-2xl max-w-lg ${isBot
             ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-bl-none'
             : 'bg-blue-500 text-white rounded-br-none'
-        }`}
+          }`}
       >
         <p className="text-sm">{message.content}</p>
       </div>
@@ -48,7 +47,7 @@ const CandidateDashboardPage = () => {
   const { user, token, isLoading: isAuthLoading } = useAuth();
   const { isDark } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+
   // === INTERVIEW STATE ===
   const [interviewPhase, setInterviewPhase] = useState('lobby'); // 'lobby', 'chat', 'report'
   const [sessionId, setSessionId] = useState(null);
@@ -66,7 +65,7 @@ const CandidateDashboardPage = () => {
   // === GENERAL STATE ===
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // --- 2. NEW STATE FOR THE FINAL REPORT ---
   const [finalReport, setFinalReport] = useState(null);
 
@@ -115,7 +114,7 @@ const CandidateDashboardPage = () => {
     }
 
     setIsLoading(true);
-    
+
     try {
       let resumeData = resumeText;
       if (hasFile) {
@@ -128,18 +127,18 @@ const CandidateDashboardPage = () => {
       }
 
       // --- REAL API CALL ---
-      const response = await startInterviewApi({ 
-        resume_text: resumeData, 
-        job_description_text: jobDescriptionText 
+      const response = await startInterviewApi({
+        resume_text: resumeData,
+        job_description_text: jobDescriptionText
       }, token);
       // --- END REAL API CALL ---
 
       setSessionId(response.session_id);
       setChatHistory([
-        { role: 'bot', content: response.first_question.conversational_text }
+        { role: 'bot', content: response.first_question }
       ]);
       setInterviewPhase('chat'); // <-- This is the magic!
-      
+
       setResumeText('');
       setJobDescriptionText('');
       setResumeFile(null);
@@ -160,7 +159,7 @@ const CandidateDashboardPage = () => {
 
     const userAnswerText = currentInput;
     const newHistory = [...chatHistory, { role: 'user', content: userAnswerText }];
-    
+
     setChatHistory(newHistory);
     setCurrentInput('');
     setIsLoading(true);
@@ -168,9 +167,9 @@ const CandidateDashboardPage = () => {
 
     try {
       // --- REAL API CALL ---
-      const response = await sendAnswerApi({ 
-        session_id: sessionId, 
-        answer_text: userAnswerText 
+      const response = await sendAnswerApi({
+        session_id: sessionId,
+        answer_text: userAnswerText
       }, token);
       // --- END REAL API CALL ---
 
@@ -185,7 +184,7 @@ const CandidateDashboardPage = () => {
       if (response.is_finished) {
         newBotMessages.push({ role: 'bot', content: "That was my last question. Thank you for your time! Generating your final report..." });
         setChatHistory([...newHistory, ...newBotMessages]);
-        
+
         // --- 5. FETCH THE REPORT ---
         await handleFetchReport(); // This will also set the phase to 'report'
 
@@ -220,7 +219,7 @@ const CandidateDashboardPage = () => {
     } catch (err) {
       setError(err.detail || "Could not fetch your report.");
       // Even if report fails, keep the phase as 'report' to show the error
-      setInterviewPhase('report'); 
+      setInterviewPhase('report');
     } finally {
       setIsLoading(false);
     }
@@ -238,7 +237,7 @@ const CandidateDashboardPage = () => {
   // Determine button state
   const canSubmitLobby = (resumeText.trim() !== '' || resumeFile !== null) && jobDescriptionText.trim() !== '' && !isLoading && !isAuthLoading;
   const canSubmitChat = currentInput.trim() !== '' && !isLoading && !isAuthLoading && interviewPhase === 'chat';
-  
+
   const activeSubmitHandler = interviewPhase === 'lobby' ? handleStartInterview : handleSendAnswer;
   const canSubmit = interviewPhase === 'lobby' ? canSubmitLobby : canSubmitChat;
 
@@ -250,9 +249,9 @@ const CandidateDashboardPage = () => {
       />
       <main className="flex-1 flex flex-col bg-white dark:bg-slate-900 transition-colors duration-300">
         <div className="flex-1 flex flex-col items-center w-full px-4 pb-4 overflow-y-auto">
-          
+
           {/* --- 7. UPDATED CONDITIONAL UI --- */}
-          
+
           {/* --- LOBBY UI --- */}
           {interviewPhase === 'lobby' && (
             <div className="w-full max-w-4xl mx-auto flex flex-col justify-between h-full">
@@ -291,15 +290,15 @@ const CandidateDashboardPage = () => {
               )}
             </div>
           )}
-          
+
           {/* --- 8. NEW REPORT UI --- */}
           {interviewPhase === 'report' && (
             <div className="w-full max-w-4xl mx-auto flex-1 overflow-y-auto pt-16 space-y-4">
               <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                >
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+              >
                 <h1 className="text-4xl font-bold text-slate-800 dark:text-slate-200 mb-4">
                   Your Interview Report
                 </h1>
@@ -337,7 +336,7 @@ const CandidateDashboardPage = () => {
               className="w-full"
             >
               {error && interviewPhase !== 'report' && <ErrorMessage message={error} onRetry={activeSubmitHandler} />}
-              
+
               {/* --- LOBBY INPUTS --- */}
               {interviewPhase === 'lobby' && (
                 <>
@@ -351,7 +350,7 @@ const CandidateDashboardPage = () => {
                         <FileText className="w-4 h-4 mr-2 text-slate-600 dark:text-slate-300" />
                         <span className="text-slate-800 dark:text-white font-medium">{resumeFile.name}</span>
                         <button onClick={handleFileDismiss} className="ml-2 p-1 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600" disabled={isLoading}>
-                          <X className="w-4 h-4 text-slate-600 dark:text-slate-300"/>
+                          <X className="w-4 h-4 text-slate-600 dark:text-slate-300" />
                         </button>
                       </div>
                     </motion.div>
@@ -369,16 +368,16 @@ const CandidateDashboardPage = () => {
                     />
                     <div className="absolute left-3 top-12 -translate-y-1/2 flex items-center">
                       {!resumeText && !isLoading && (
-                          <>
-                              <input
-                                  type="file" id="resume-upload" className="hidden"
-                                  onChange={handleFileChange} ref={fileInputRef}
-                                  accept=".pdf,.doc,.docx,.txt"
-                              />
-                              <label htmlFor="resume-upload" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer">
-                                  <Paperclip className="w-5 h-5" />
-                              </label>
-                          </>
+                        <>
+                          <input
+                            type="file" id="resume-upload" className="hidden"
+                            onChange={handleFileChange} ref={fileInputRef}
+                            accept=".pdf,.doc,.docx,.txt"
+                          />
+                          <label htmlFor="resume-upload" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer">
+                            <Paperclip className="w-5 h-5" />
+                          </label>
+                        </>
                       )}
                     </div>
                   </div>
