@@ -14,6 +14,9 @@ from interview_system.schemas.agent_outputs import (
 from interview_system.services.llm_clients import get_llm
 from interview_system.services.vector_store import get_vector_store
 
+from ..api.database import get_db_session
+from ..repositories.review_queue_repository import ReviewQueueRepository
+
 logger = logging.getLogger(__name__)  # <-- From your teammate
 
 FALLBACK_MIN_RELEVANCE = 0.35
@@ -89,7 +92,19 @@ async def _generate_and_present_fallback(
 
         json_str = response.content[start_index:end_index]
         data = json.loads(json_str)
-        # --- END FIX ---
+        try:
+            with get_db_session() as db:
+                repo = ReviewQueueRepository(db)
+                repo.create_pending_question(question_json=data)
+            logger.info(
+                f"Successfully saved fallback question for '{domain}' to review queue."
+            )
+        except Exception as db_exc:
+            # Log the error, but don't fail the interview for the user
+            logger.error(
+                f"Failed to save fallback question to review queue: {db_exc}",
+                exc_info=True,
+            )
 
         # Check if "raw_question" key exists as per your original file's logic
         if "raw_question" in data and isinstance(data["raw_question"], dict):
