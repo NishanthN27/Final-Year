@@ -1,13 +1,12 @@
+import os
+import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-
-# --- ADD THESE IMPORTS ---
-import sys
-import os
+from src.interview_system.models.question import Question
+from src.interview_system.models.review_queue import ReviewQueue
 
 # Add your project's 'src' directory to the Python path
 # This allows Alembic to find your models
@@ -16,6 +15,7 @@ sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..'
 # Import your Base and all your models
 from src.interview_system.models.base import Base
 from src.interview_system.models.user import User
+
 # Import other models as defined in your README.md
 # This ensures all future changes are tracked.
 # from src.interview_system.models.session import Session
