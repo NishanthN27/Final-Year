@@ -120,6 +120,7 @@ async def create_new_interview_session(
 
 # --- Endpoint 2: Submit Answer (from old_interview.py logic) ---
 # --- Endpoint 2: Submit Answer (Corrected) ---
+# --- Endpoint 2: Submit Answer (Corrected) ---
 @router.post(
     "/sessions/{session_id}/answer",
     response_model=SubmitAnswerResponse,
@@ -149,7 +150,6 @@ async def submit_answer(
              raise HTTPException(status_code=400, detail="No active question in state.")
 
         # 2. Update the state with the new answer
-        # current_question = QuestionTurn(**current_question_dict) <-- REMOVE THIS LINE
         current_question.answer_text = request.answer_text
         
         # TODO: Implement rubric fetching logic
@@ -173,26 +173,48 @@ async def submit_answer(
         logger.info(f"--- Resuming graph at 'run_evaluation' for {session_id} ---")
         final_state = await graph.ainvoke(None, config=config, at="run_evaluation")
 
-        # 4. --- EXTRACT RESPONSE (Corrected Logic) ---
+        # 4. --- EXTRACT RESPONSE (Logic ported from new_interactive_interview.py) ---
         next_question_obj_dict = final_state.get("current_question")
         history = final_state.get("question_history", [])
         
-        feedback_text = "Feedback is being processed."
+        feedback_text = "Feedback is being processed." # Default
         is_follow_up = False
 
         if history:
             last_turn_in_history = history[-1] # This is a QuestionTurn object
             
             # Use dot notation to check if 'feedback' attribute exists
+            # This 'feedback' attribute is the dictionary from your agent
             if last_turn_in_history.feedback:
                 # Path A: Normal loop. Feedback was generated.
                 is_follow_up = False
                 
-                # Use dictionary .get() to access the nested 'fast_summary'
-                feedback_text = (
-                    last_turn_in_history.feedback.get("fast_summary")
-                    or "Great, let's move on."
-                )
+                # --- START: Logic from new_interactive_interview.py  ---
+                detailed_feedback_dict = last_turn_in_history.feedback
+                
+                # Use .get() for dictionary access
+                improvement_points = detailed_feedback_dict.get("improvement_points")
+                
+                if improvement_points:
+                    # Build a single string from the list of points
+                    feedback_text = "💡 Deeper Feedback:"
+                    bullets = []
+                    for point in improvement_points:
+                        # point is also a dict, use .get()
+                        if point and point.get("bullet"):
+                            bullets.append(f"   - {point.get('bullet')}")
+                    
+                    if bullets:
+                        feedback_text += "\n" + "\n".join(bullets)
+                    else:
+                        # Fallback if points list is empty
+                        feedback_text = "   - Well noted, thank you for your response."
+                
+                else:
+                    # Fallback if 'improvement_points' key doesn't exist
+                    feedback_text = "   - Well noted, thank you for your response."
+                # --- END: Logic from new_interactive_interview.py ---
+            
             else:
                 # Path B: Follow-up loop. Feedback was NOT generated.
                 is_follow_up = True
