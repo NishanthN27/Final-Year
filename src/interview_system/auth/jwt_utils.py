@@ -8,7 +8,7 @@ import logging
 # --- Configuration ---
 SECRET_KEY = settings.JWT_SECRET_KEY
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15  # Short-lived access token
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Short-lived access token
 REFRESH_TOKEN_EXPIRE_DAYS = 7     # Long-lived refresh token
 
 def create_access_token(data: dict) -> str:
