@@ -1,8 +1,10 @@
-# src\interview_system\api\main.py
+# src/interview_system/api/main.py
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
+# This fixes the 'GOOGLE_API_KEY environment variable not set' error.
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -52,9 +54,8 @@ def startup_event():
 
 # --- Include API Routers ---
 #
-# --- UPDATED SECTION ---
-# Reverted to the old style (like main_old.py)
-# by removing the `prefix="/api"` from all routers.
+# This section is reverted to the "old" style that was working.
+# The `prefix="/api"` has been removed.
 #
 app.include_router(auth_router.router)
 app.include_router(interview_router.router)

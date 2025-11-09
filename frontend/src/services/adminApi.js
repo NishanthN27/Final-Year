@@ -2,9 +2,27 @@ import axios from 'axios';
 import { getMockReviewQueueItems, mockReviewQueueItems } from '../data/mockData';
 import { getMockRubrics, mockRubrics } from '../data/mockRubrics';
 
-const API_BASE_URL = '/api';
-const USE_MOCK_DATA = true; // Set to false when backend is ready
+const API_BASE_URL = 'http://localhost:8000';
+const USE_MOCK_DATA = false; // Set to false when backend is ready
+const api = axios.create({
+  baseURL: `${API_BASE_URL}/admin`, // All calls will go to /admin
+});
 
+// 2. Add the MISSING authentication interceptor
+// This code runs on *every* request and adds the auth token from localStorage
+api.interceptors.request.use(
+  (config) => {
+    // AuthContext stores the token under 'accessToken' (camelCase)
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 // Review Queue API calls
 export const reviewQueueApi = {
   // Get all review queue items with optional filtering
@@ -15,7 +33,7 @@ export const reviewQueueApi = {
       return getMockReviewQueueItems(params);
     }
     
-    const response = await axios.get(`${API_BASE_URL}/admin/review-queue`, { params });
+    const response = await api.get('/review-queue', { params });
     return response.data;
   },
 
@@ -28,7 +46,7 @@ export const reviewQueueApi = {
       return item;
     }
     
-    const response = await axios.get(`${API_BASE_URL}/admin/review-queue/${itemId}`);
+    const response = await api.get(`/review-queue/${itemId}`);
     return response.data;
   },
 
@@ -48,7 +66,7 @@ export const reviewQueueApi = {
       return newItem;
     }
     
-    const response = await axios.post(`${API_BASE_URL}/admin/review-queue`, itemData);
+    const response = await api.post('/review-queue', itemData);
     return response.data;
   },
 
@@ -62,7 +80,7 @@ export const reviewQueueApi = {
       return mockReviewQueueItems[itemIndex];
     }
     
-    const response = await axios.put(`${API_BASE_URL}/admin/review-queue/${itemId}`, itemData);
+    const response = await api.put(`/review-queue/${itemId}`, itemData);
     return response.data;
   },
 
@@ -81,7 +99,7 @@ export const reviewQueueApi = {
       return mockReviewQueueItems[itemIndex];
     }
     
-    const response = await axios.post(`${API_BASE_URL}/admin/review-queue/${itemId}/approve`, {
+    const response = await api.post(`/review-queue/${itemId}/approve`, {
       review_notes: reviewNotes
     });
     return response.data;
@@ -102,7 +120,7 @@ export const reviewQueueApi = {
       return mockReviewQueueItems[itemIndex];
     }
     
-    const response = await axios.post(`${API_BASE_URL}/admin/review-queue/${itemId}/reject`, {
+    const response = await api.post(`/review-queue/${itemId}/reject`, {
       review_notes: reviewNotes
     });
     return response.data;
@@ -118,7 +136,7 @@ export const reviewQueueApi = {
       return { success: true };
     }
     
-    const response = await axios.delete(`${API_BASE_URL}/admin/review-queue/${itemId}`);
+    const response = await api.delete(`/review-queue/${itemId}`);
     return response.data;
   }
 };
@@ -132,7 +150,7 @@ export const rubricsApi = {
       return getMockRubrics(params);
     }
     
-    const response = await axios.get(`${API_BASE_URL}/admin/rubrics`, { params });
+    const response = await api.get('/rubrics', { params });
     return response.data;
   },
 
@@ -145,7 +163,7 @@ export const rubricsApi = {
       return rubric;
     }
     
-    const response = await axios.get(`${API_BASE_URL}/admin/rubrics/${rubricId}`);
+    const response = await api.get(`/rubrics/${rubricId}`);
     return response.data;
   },
 
@@ -164,7 +182,7 @@ export const rubricsApi = {
       return newRubric;
     }
     
-    const response = await axios.post(`${API_BASE_URL}/admin/rubrics`, rubricData);
+    const response = await api.post('/rubrics', rubricData);
     return response.data;
   },
 
@@ -182,7 +200,7 @@ export const rubricsApi = {
       return mockRubrics[rubricIndex];
     }
     
-    const response = await axios.put(`${API_BASE_URL}/admin/rubrics/${rubricId}`, rubricData);
+    const response = await api.put(`/rubrics/${rubricId}`, rubricData);
     return response.data;
   },
 
@@ -196,7 +214,7 @@ export const rubricsApi = {
       return { success: true };
     }
     
-    const response = await axios.delete(`${API_BASE_URL}/admin/rubrics/${rubricId}`);
+    const response = await api.delete(`/rubrics/${rubricId}`);
     return response.data;
   }
 };
@@ -205,7 +223,7 @@ export const rubricsApi = {
 export const adminStatsApi = {
   // Get admin dashboard statistics
   getStats: async () => {
-    const response = await axios.get(`${API_BASE_URL}/admin/stats`);
+    const response = await api.get('/stats');
     return response.data;
   }
 };
