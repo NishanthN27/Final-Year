@@ -273,7 +273,7 @@ async def get_report(
             try:
                 # Synchronous long-running call
                 final_state = await graph.ainvoke(None, config=config, at="final_reporting_entry")
-                report = final_state.values.get("final_report")
+                report = final_state.get("final_report")
                 profile = final_state.values.get("personalization_profile")
             except Exception as e:
                  # Catch graph invocation errors and treat the report as unavailable

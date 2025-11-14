@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from typing import List
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- NEW: A Generic Schema for Raw Question Data ---
@@ -144,13 +145,26 @@ class PersonalizationOutput(BaseModel):
         ..., description="List of recommended exercise/question IDs."
     )
 
+class QuestionBreakdownItem(BaseModel):
+    question_number: int
+    question_text: str
+    candidate_answer: str
+    evaluation_summary: str
+    evaluation_score: float
+    feedback_points: List[str]
 
 # --- ReportGenAgent ---
 class ReportGenOutput(BaseModel):
-    report_html: str = Field(..., description="The final report as an HTML string.")
-    overall_score: float = Field(
-        ..., description="The final, aggregated score for the session."
-    )
-    top_3_improvements: list[str] = Field(
-        ..., description="A list of the top three areas for improvement."
-    )
+    overall_summary: str
+    overall_score: float
+    top_3_improvements: List[str]
+    question_breakdown: List[QuestionBreakdownItem]
+
+    @field_validator("top_3_improvements")
+    def validate_top_3(cls, v):
+        if len(v) != 3:
+            raise ValueError("top_3_improvements must contain exactly 3 items")
+        return v
+
+
+
