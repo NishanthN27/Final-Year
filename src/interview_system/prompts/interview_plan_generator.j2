@@ -21,23 +21,31 @@ Your goal is to create a plan that is deeply relevant and tailored, paying speci
 ```
 
 ### INSTRUCTIONS ###
-1.  **Always** start the plan with `"introduction"` and `"behavioral"` and mix in a few `"behavioral"` questions throughout the plan.
-2.  **Prioritize Previous Feedback:** If a `personalization_profile` exists, your highest priority is to incorporate the topics from it.
-3.  **Add New Deep Dives:** Select 1-2 additional relevant projects or skills from the resume to create new `deep_dive` steps.
-4.  **Always** end the plan with `"wrap_up"`.
-5.  The final plan must be a list of strings.
+1.  **Start** with `"introduction"` and `"behavioral"`.
+2.  **Mix in Behavioral Questions:** Ensure there are 1-2 behavioral questions sprinkled throughout the plan to assess soft skills.
+3.  **Prioritize Previous Feedback:** If a `personalization_profile` exists, your highest priority is to incorporate the topics from it.
+4.  **Deep Dives:** Select 1-2 relevant projects or specific skills from the resume to create new `deep_dive` steps.
+5.  **Technical Questions (CRITICAL):** You MUST include 2-3 technical questions.
+    - These should cover general Computer Science fundamentals (e.g., algorithms, data structures, system design) or broad technical topics relevant to the role (e.g., "technical:data-science", "technical:cloud-computing", "technical:backend-systems").
+    - They should not be tied to a specific project on the resume but rather to the domain of the job.
+6.  **End** the plan with `"wrap_up"`.
+7.  The final plan must be a list of strings.
 
 ### FORMATTING RULES (VERY IMPORTANT) ###
 - You MUST respond with ONLY a valid JSON object with a single key, "plan".
-- For any deep-dive topic, the string MUST follow the exact format: `'deep_dive:type:name'`.
-  - The `type` MUST be either `'project'` or `'skill'`.
-  - The `name` MUST be the title of the project or the name of the skill from the resume.
-  - **Correct Example:** `"deep_dive:project:Project Apollo"`
-  - **Correct Example:** `"deep_dive:skill:TensorFlow"`
-  - **INCORRECT Example:** `"deep_dive_project_apollo"` (Do NOT use underscores)
+- **Deep Dives:** MUST follow the format `'deep_dive:type:name'`.
+  - `type` is 'project' or 'skill'.
+  - `name` is the exact item name from the resume.
+  - Example: `"deep_dive:project:Project Apollo"`
+- **Technical Questions:** MUST follow the format `'technical:topic'`.
+  - `topic` is a broad technical domain or concept (lowercase, hyphen-separated).
+  - Example: `"technical:data-science"`
+  - Example: `"technical:distributed-systems"`
+  - Example: `"technical:python-fundamentals"`
+- **Behavioral:** Use the string `"behavioral"`.
+- **Introduction/Wrap-up:** Use `"introduction"` and `"wrap_up"`.
 
 ### YOUR TASK ###
 Create the new, personalized plan based on all available context, following all instructions and formatting rules.
 
 **Your JSON Output:**
-

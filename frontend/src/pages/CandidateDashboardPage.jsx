@@ -257,6 +257,10 @@ const CandidateDashboardPage = () => {
    */
   const handleStartInterview = async () => {
     setError(null);
+
+    // --- FIX: Stop listening if active to reset speech engine ---
+    if (isListening) stopListening();
+
     const hasText = resumeText.trim() !== "";
     const hasFile = resumeFile !== null;
     const hasJd = jobDescriptionText.trim() !== "";
@@ -311,6 +315,11 @@ const CandidateDashboardPage = () => {
    */
   const handleSendAnswer = async () => {
     if (currentInput.trim() === "") return;
+
+    // --- FIX: Stop listening on send to reset transcript buffer for next turn ---
+    if (isListening) {
+      stopListening();
+    }
 
     const userAnswerText = currentInput;
     const newHistory = [
