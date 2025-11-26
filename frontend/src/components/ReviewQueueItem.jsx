@@ -1,8 +1,7 @@
-// frontend/src/components/ReviewQueueItem.jsx
 import React from "react";
-import { CheckIcon, XMarkIcon, PencilIcon } from "@heroicons/react/24/solid";
+import { CheckIcon, XMarkIcon } from "@heroicons/react/24/solid";
 
-const ReviewQueueItem = ({ item, onApprove, onReject, onEdit }) => {
+const ReviewQueueItem = ({ item, onApprove, onReject }) => {
   // Parse the data from the item prop
   const questionData = item.candidate_question_json || {};
   const rawQuestion = questionData.raw_question || {};
@@ -11,7 +10,10 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit }) => {
     questionData.conversational_text || "No conversational text found.";
   const rawText = rawQuestion.text || "No raw text found.";
   const domain = rawQuestion.domain || "unknown";
-  const difficulty = rawQuestion.difficulty || "N/A";
+  
+  // Ensure difficulty is always a string
+  const difficulty = String(rawQuestion.difficulty || "N/A");
+  
   const idealAnswer =
     rawQuestion.ideal_answer_snippet || "No ideal answer provided.";
 
@@ -74,14 +76,6 @@ const ReviewQueueItem = ({ item, onApprove, onReject, onEdit }) => {
             title="Approve Question"
           >
             <CheckIcon className="h-5 w-5 group-hover/btn:scale-110 transition-transform" />
-          </button>
-
-          <button
-            onClick={onEdit}
-            className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-amber-600 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/30 dark:hover:border-amber-800 rounded-xl transition-all shadow-sm hover:shadow group/btn"
-            title="Edit Details"
-          >
-            <PencilIcon className="h-5 w-5 group-hover/btn:scale-110 transition-transform" />
           </button>
 
           <button
