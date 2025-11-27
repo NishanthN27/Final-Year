@@ -139,7 +139,6 @@ const AdminDashboardPage = () => {
               label="Total Users" 
               value={stats.totalUsers.toLocaleString()} 
               icon={Users}
-              trend="+12 this week"
             />
           </div>
 
