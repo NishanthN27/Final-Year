@@ -1,83 +1,246 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Send, Mic, Paperclip, X, FileText, LoaderCircle, Bot, User, Sparkles } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import GeminiSidebar from '../components/GeminiSidebar';
-import { useTheme } from '../contexts/ThemeContext';
-// --- 1. IMPORT YOUR REAL API FUNCTIONS ---
-import { startInterviewApi, sendAnswerApi, getReportApi } from '../services/interviewApi';
-// TODO: You still need your resume upload function (if you use it)
-// import { uploadResume } from '../services/sessionApi'; 
-import ErrorMessage from '../components/ErrorMessage';
-import { useNavigate } from 'react-router-dom';
-import LoadingSpinner from '../components/LoadingSpinner';
+import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Send,
+  Mic,
+  Paperclip,
+  X,
+  FileText,
+  LoaderCircle,
+  Bot,
+  User,
+  Sparkles,
+  Briefcase,
+  ChevronRight,
+  Cpu,
+} from "lucide-react";
+import { useAuth } from "../contexts/AuthContext.jsx";
+import GeminiSidebar from "../components/GeminiSidebar.jsx";
+import { useTheme } from "../contexts/ThemeContext.jsx";
+import {
+  startInterviewApi,
+  sendAnswerApi,
+  getReportApi,
+} from "../services/interviewApi.js";
+import ErrorMessage from "../components/ErrorMessage.jsx";
+import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import useWebSpeech from "../hooks/useWebSpeech";
 
-// --- (ChatBubble component is unchanged) ---
+// --- HELPER: Report HTML Generator ---
+function generateReportHtml(data) {
+  const createListItems = (items) => {
+    if (!Array.isArray(items)) return "";
+    return items.map((item) => `<li>${item}</li>`).join("");
+  };
+
+  const createQuestionSections = (questions) => {
+    if (!Array.isArray(questions)) {
+      console.warn("question_breakdown is not an array:", questions);
+      return "";
+    }
+    return questions
+      .map(
+        (q) => `
+            <div class="question-section">
+                <h3>Question ${q.question_number}: ${q.question_text}</h3>
+                <p><strong>Candidate's Answer:</strong> ${q.candidate_answer.replace(
+                  /\n/g,
+                  "<br>"
+                )}</p>
+                <div class="evaluation-summary">
+                    <p><strong>Evaluation Summary (Score: ${
+                      q.evaluation_score
+                    }%):</strong> ${q.evaluation_summary}</p>
+                </div>
+                <div class="feedback">
+                    <h4>Feedback & Improvement Points:</h4>
+                    <ul>
+                        ${createListItems(q.feedback_points)}
+                    </ul>
+                </div>
+            </div>
+        `
+      )
+      .join("");
+  };
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Performance Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 20px auto; background: #f4f4f4; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #0056b3; }
+        h1 { text-align: center; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 20px; }
+        .section { background: #fff; padding: 15px; margin-bottom: 20px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.05); }
+        .overall-summary p { font-size: 1.1em; }
+        .overall-summary .score { font-weight: bold; }
+        .question-section { border-left: 5px solid #007bff; padding-left: 15px; margin-top: 25px; }
+        .question-section h3 { color: #007bff; margin-top: 0; }
+        .question-section strong { color: #555; }
+        .evaluation-summary { background: #e9f7ff; border-left: 3px solid #0056b3; padding: 10px; margin-top: 10px; border-radius: 3px; }
+        .feedback { background: #fff3cd; border-left: 3px solid #ffc107; padding: 10px; margin-top: 10px; border-radius: 3px; }
+        ul { list-style-type: disc; margin-left: 20px; }
+        ol { list-style-type: decimal; margin-left: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Interview Performance Report</h1>
+    <div class="section overall-summary">
+        <h2>Overall Summary</h2>
+        <p>${data.overall_summary}</p>
+        <p class="score"><strong>Overall Score: ${
+          data.overall_score
+        }%</strong></p>
+    </div>
+    <div class="section">
+        <h2>Top 3 Areas for Improvement</h2>
+        <ol>
+            ${createListItems(data.top_3_improvements)}
+        </ol>
+    </div>
+    <div class="section">
+        <h2>Detailed Question Breakdown</h2>
+        ${createQuestionSections(data.question_breakdown)}
+    </div>
+</body>
+</html>
+    `;
+}
+
+// --- COMPONENT: Chat Bubble ---
 const ChatBubble = ({ message }) => {
-  const { isDark } = useTheme();
-  const isBot = message.role === 'bot';
-  const isFeedback = message.role === 'feedback';
+  const isBot = message.role === "bot";
+  const isFeedback = message.role === "feedback";
 
   if (isFeedback) {
     return (
-      <div className="my-2 flex justify-center">
-        <div className={`text-xs p-2 px-3 rounded-lg bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 flex items-center`}>
-          <Sparkles className="w-4 h-4 mr-2 flex-shrink-0" />
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="my-4 flex justify-center"
+      >
+        <div className="text-xs font-medium py-2 px-4 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 flex items-center shadow-sm border border-indigo-100 dark:border-indigo-800">
+          <Sparkles className="w-3 h-3 mr-2 text-indigo-500" />
           <span>{message.content}</span>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className={`flex ${isBot ? 'justify-start' : 'justify-end'} my-2`}>
+    <motion.div
+      initial={{ opacity: 0, x: isBot ? -20 : 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      className={`flex ${isBot ? "justify-start" : "justify-end"} my-4 px-2`}
+    >
       <div
-        className={`p-3 rounded-2xl max-w-lg ${isBot
-            ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-bl-none'
-            : 'bg-blue-500 text-white rounded-br-none'
-          }`}
+        className={`flex max-w-2xl ${
+          isBot ? "flex-row" : "flex-row-reverse"
+        } items-end gap-3`}
       >
-        <p className="text-sm">{message.content}</p>
+        {/* Avatar */}
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+            isBot
+              ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+              : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+          }`}
+        >
+          {isBot ? <Bot size={16} /> : <User size={16} />}
+        </div>
+
+        {/* Bubble */}
+        <div
+          className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
+            isBot
+              ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-bl-none"
+              : "bg-blue-600 text-white rounded-br-none"
+          }`}
+        >
+          {message.content}
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
+// --- MAIN COMPONENT: CandidateDashboardPage ---
 const CandidateDashboardPage = () => {
   const { user, token, isLoading: isAuthLoading } = useAuth();
   const { isDark } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // === INTERVIEW STATE ===
-  const [interviewPhase, setInterviewPhase] = useState('lobby'); // 'lobby', 'chat', 'report'
+  const [interviewPhase, setInterviewPhase] = useState("lobby"); // 'lobby', 'chat', 'report'
   const [sessionId, setSessionId] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
-  const [currentInput, setCurrentInput] = useState('');
+  const [currentInput, setCurrentInput] = useState("");
   const chatContainerRef = useRef(null);
 
   // === LOBBY STATE ===
-  const [resumeText, setResumeText] = useState('');
-  const [jobDescriptionText, setJobDescriptionText] = useState('');
+  const [resumeText, setResumeText] = useState("");
+  const [jobDescriptionText, setJobDescriptionText] = useState("");
   const [resumeFile, setResumeFile] = useState(null);
   const fileInputRef = useRef(null);
-  const navigate = useNavigate();
 
   // === GENERAL STATE ===
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // --- 2. NEW STATE FOR THE FINAL REPORT ---
+  // === REPORT STATE ===
   const [finalReport, setFinalReport] = useState(null);
 
+  // === WEB SPEECH API ===
+  const { isListening, transcript, startListening, stopListening, hasSupport } =
+    useWebSpeech();
+  const previousInputRef = useRef("");
 
-  // Auto-scroll chat
+  useEffect(() => {
+    if (isListening) {
+      previousInputRef.current = currentInput;
+    }
+  }, [isListening]);
+
+  useEffect(() => {
+    if (transcript && isListening) {
+      const prefix = previousInputRef.current;
+      const spacer = prefix && !prefix.endsWith(" ") ? " " : "";
+      setCurrentInput(`${prefix}${spacer}${transcript}`);
+    }
+  }, [transcript, isListening]);
+
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
     }
   }, [chatHistory]);
 
-  // --- (Lobby helper functions are unchanged) ---
+  useEffect(() => {
+    if (finalReport && interviewPhase === "report") {
+      try {
+        const finalHtml = generateReportHtml(finalReport);
+        const newWindow = window.open("", "_blank");
+        if (newWindow) {
+          newWindow.document.write(finalHtml);
+          newWindow.document.close();
+        } else {
+          alert("Please allow popups to view your report.");
+        }
+      } catch (error) {
+        console.error("Failed to build report HTML:", error);
+        setError(
+          "Report data was fetched, but the HTML template failed to build."
+        );
+      }
+    }
+  }, [finalReport, interviewPhase]);
+
+  // --- HANDLERS ---
   const handleTextChange = (e) => {
     setResumeText(e.target.value);
     if (resumeFile) setResumeFile(null);
@@ -86,7 +249,7 @@ const CandidateDashboardPage = () => {
     const file = e.target.files[0];
     if (file) {
       setResumeFile(file);
-      setResumeText('');
+      setResumeText("");
     }
   };
   const handleFileDismiss = () => {
@@ -96,20 +259,18 @@ const CandidateDashboardPage = () => {
     }
   };
 
-  // --- API FUNCTIONS ---
-
-  /**
-   * --- 3. UPDATED WITH REAL API CALL ---
-   * Step 1 - Starts the interview
-   */
   const handleStartInterview = async () => {
     setError(null);
-    const hasText = resumeText.trim() !== '';
+    if (isListening) stopListening();
+
+    const hasText = resumeText.trim() !== "";
     const hasFile = resumeFile !== null;
-    const hasJd = jobDescriptionText.trim() !== '';
+    const hasJd = jobDescriptionText.trim() !== "";
 
     if ((!hasText && !hasFile) || !hasJd) {
-      setError("Please provide both a resume (text or file) and a job description.");
+      setError(
+        "Please provide both a resume (text or file) and a job description."
+      );
       return;
     }
 
@@ -118,31 +279,24 @@ const CandidateDashboardPage = () => {
     try {
       let resumeData = resumeText;
       if (hasFile) {
-        // TODO: Implement your file upload logic here if needed
-        // For now, we just simulate it as your BE accepts text
-        console.log("Simulating file upload and text extraction...");
-        // const uploadResponse = await uploadResume(resumeFile, token);
-        // resumeData = uploadResponse.extracted_text;
-        resumeData = `Uploaded file: ${resumeFile.name}. (This is a placeholder, actual text extraction needed if you support files)`;
+        resumeData = `Uploaded file: ${resumeFile.name}. (Placeholder)`;
       }
 
-      // --- REAL API CALL ---
-      const response = await startInterviewApi({
-        resume_text: resumeData,
-        job_description_text: jobDescriptionText
-      }, token);
-      // --- END REAL API CALL ---
+      const response = await startInterviewApi(
+        {
+          resume_text: resumeData,
+          job_description_text: jobDescriptionText,
+        },
+        token
+      );
 
       setSessionId(response.session_id);
-      setChatHistory([
-        { role: 'bot', content: response.first_question }
-      ]);
-      setInterviewPhase('chat'); // <-- This is the magic!
+      setChatHistory([{ role: "bot", content: response.first_question }]);
+      setInterviewPhase("chat");
 
-      setResumeText('');
-      setJobDescriptionText('');
+      setResumeText("");
+      setJobDescriptionText("");
       setResumeFile(null);
-
     } catch (err) {
       setError(err.detail || "An unexpected error occurred. Please try again.");
     } finally {
@@ -150,307 +304,410 @@ const CandidateDashboardPage = () => {
     }
   };
 
-  /**
-   * --- 4. UPDATED WITH REAL API CALL ---
-   * Step 2 - Handles the main chat loop
-   */
   const handleSendAnswer = async () => {
-    if (currentInput.trim() === '') return;
+    if (currentInput.trim() === "") return;
+    if (isListening) stopListening();
 
     const userAnswerText = currentInput;
-    const newHistory = [...chatHistory, { role: 'user', content: userAnswerText }];
+    const newHistory = [
+      ...chatHistory,
+      { role: "user", content: userAnswerText },
+    ];
 
     setChatHistory(newHistory);
-    setCurrentInput('');
+    setCurrentInput("");
     setIsLoading(true);
     setError(null);
 
     try {
-      // --- REAL API CALL ---
-      const response = await sendAnswerApi({
-        session_id: sessionId,
-        answer_text: userAnswerText
-      }, token);
-      // --- END REAL API CALL ---
+      const response = await sendAnswerApi(
+        { session_id: sessionId, answer_text: userAnswerText },
+        token
+      );
 
       const newBotMessages = [];
-      // 1. Add feedback, if any
       if (response.feedback && response.feedback.improvement_points) {
-        const feedbackText = response.feedback.improvement_points.map(p => p.bullet).join(' ');
-        newBotMessages.push({ role: 'feedback', content: feedbackText });
+        const feedbackText = response.feedback.improvement_points
+          .map((p) => p.bullet)
+          .join(" ");
+        newBotMessages.push({ role: "feedback", content: feedbackText });
       }
 
-      // 2. Add next question OR fetch the report
       if (response.is_finished) {
-        newBotMessages.push({ role: 'bot', content: "That was my last question. Thank you for your time! Generating your final report..." });
+        newBotMessages.push({
+          role: "bot",
+          content:
+            "That was my last question. Thank you for your time! Generating your final report...",
+        });
         setChatHistory([...newHistory, ...newBotMessages]);
-
-        // --- 5. FETCH THE REPORT ---
-        await handleFetchReport(); // This will also set the phase to 'report'
-
+        await handleFetchReport();
       } else {
         if (response.next_question) {
-          newBotMessages.push({ role: 'bot', content: response.next_question.conversational_text });
+          newBotMessages.push({
+            role: "bot",
+            content: response.next_question.conversational_text,
+          });
         } else {
-          // Fallback in case is_finished is false but next_question is null
-          newBotMessages.push({ role: 'bot', content: "Please wait a moment..." });
+          newBotMessages.push({
+            role: "bot",
+            content: "Please wait a moment...",
+          });
         }
         setChatHistory([...newHistory, ...newBotMessages]);
       }
-
     } catch (err) {
       setError(err.detail || "An unexpected error occurred. Please try again.");
-      setChatHistory(chatHistory); // Revert history
-      setCurrentInput(userAnswerText); // Put text back in box
+      setChatHistory(chatHistory);
+      setCurrentInput(userAnswerText);
     } finally {
       setIsLoading(false);
     }
   };
 
-  /**
-   * --- 6. NEW FUNCTION TO FETCH AND DISPLAY THE REPORT ---
-   */
   const handleFetchReport = async () => {
-    setIsLoading(true); // Keep spinner active
+    setIsLoading(true);
     try {
       const reportData = await getReportApi(sessionId, token);
-      setFinalReport(reportData.final_report); // Save the report
-      setInterviewPhase('report'); // Change the UI to show the report
+      if (reportData && reportData.final_report) {
+        setFinalReport(reportData.final_report);
+      } else {
+        throw new Error("Report data not found in the response.");
+      }
+      setInterviewPhase("report");
     } catch (err) {
       setError(err.detail || "Could not fetch your report.");
-      // Even if report fails, keep the phase as 'report' to show the error
-      setInterviewPhase('report');
+      setInterviewPhase("report");
     } finally {
       setIsLoading(false);
     }
   };
-
 
   if (isAuthLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-white dark:bg-slate-900">
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-900">
         <LoadingSpinner text="Authenticating..." />
       </div>
     );
   }
 
-  // Determine button state
-  const canSubmitLobby = (resumeText.trim() !== '' || resumeFile !== null) && jobDescriptionText.trim() !== '' && !isLoading && !isAuthLoading;
-  const canSubmitChat = currentInput.trim() !== '' && !isLoading && !isAuthLoading && interviewPhase === 'chat';
-
-  const activeSubmitHandler = interviewPhase === 'lobby' ? handleStartInterview : handleSendAnswer;
-  const canSubmit = interviewPhase === 'lobby' ? canSubmitLobby : canSubmitChat;
+  const canSubmitLobby =
+    (resumeText.trim() !== "" || resumeFile !== null) &&
+    jobDescriptionText.trim() !== "" &&
+    !isLoading;
+  const canSubmitChat =
+    currentInput.trim() !== "" && !isLoading && interviewPhase === "chat";
+  const activeSubmitHandler =
+    interviewPhase === "lobby" ? handleStartInterview : handleSendAnswer;
 
   return (
-    <div className={`flex h-screen overflow-hidden ${isDark ? 'dark' : ''}`}>
+    <div className={`flex h-screen overflow-hidden ${isDark ? "dark" : ""}`}>
       <GeminiSidebar
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
       />
-      <main className="flex-1 flex flex-col bg-white dark:bg-slate-900 transition-colors duration-300">
-        <div className="flex-1 flex flex-col items-center w-full px-4 pb-4 overflow-y-auto">
+      <main className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300 relative">
+        {/* === HEADER === */}
+        <div className="h-16 px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between z-10">
+          {/* Title Removed as requested */}
+          <div className="flex-1"></div>
 
-          {/* --- 7. UPDATED CONDITIONAL UI --- */}
+          <div className="flex items-center space-x-3">
+            <div
+              className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                interviewPhase === "chat"
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+              }`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  interviewPhase === "chat"
+                    ? "bg-green-500 animate-pulse"
+                    : "bg-slate-400"
+                }`}
+              />
+              <span>
+                {interviewPhase === "lobby"
+                  ? "Setup"
+                  : interviewPhase === "chat"
+                  ? "Live Session"
+                  : "Report"}
+              </span>
+            </div>
+          </div>
+        </div>
 
-          {/* --- LOBBY UI --- */}
-          {interviewPhase === 'lobby' && (
-            <div className="w-full max-w-4xl mx-auto flex flex-col justify-between h-full">
-              <div className="pt-16">
+        <div className="flex-1 flex flex-col items-center w-full relative overflow-hidden">
+          <AnimatePresence>
+            {error && interviewPhase !== "report" && (
+              <div className="absolute top-4 left-0 right-0 z-50 flex justify-center px-4">
+                <ErrorMessage message={error} onRetry={activeSubmitHandler} />
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* === PHASE 1: LOBBY === */}
+          {interviewPhase === "lobby" && (
+            <div className="w-full h-full p-4 overflow-y-auto flex items-center justify-center">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8"
+              >
+                <div className="text-center mb-8">
+                  {/* Title and Subtitle removed as requested */}
+                  <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-400">
+                    <Cpu size={32} />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Resume Section */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                      <span className="flex items-center">
+                        <FileText size={16} className="mr-2" /> Resume / CV
+                      </span>
+                      {resumeFile && (
+                        <button
+                          onClick={handleFileDismiss}
+                          className="text-xs text-red-500 hover:text-red-600 flex items-center"
+                        >
+                          <X size={12} className="mr-1" /> Remove File
+                        </button>
+                      )}
+                    </label>
+
+                    <div className="relative group">
+                      {!resumeFile && (
+                        <div className="absolute top-3 right-3 z-10">
+                          <input
+                            type="file"
+                            id="resume-upload"
+                            className="hidden"
+                            onChange={handleFileChange}
+                            ref={fileInputRef}
+                            accept=".pdf,.doc,.docx,.txt"
+                          />
+                          <label
+                            htmlFor="resume-upload"
+                            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors block"
+                            title="Attach File"
+                          >
+                            <Paperclip size={18} />
+                          </label>
+                        </div>
+                      )}
+                      <textarea
+                        rows={3}
+                        value={resumeText}
+                        onChange={handleTextChange}
+                        disabled={isLoading || isAuthLoading || resumeFile}
+                        placeholder={
+                          resumeFile
+                            ? `Attached: ${resumeFile.name}`
+                            : "Paste your resume text here, or click the paperclip to upload..."
+                        }
+                        className={`w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-500 outline-none transition-all resize-none text-sm ${
+                          resumeFile
+                            ? "text-blue-600 font-medium bg-blue-50 dark:bg-blue-900/10 border-blue-200"
+                            : "text-slate-700 dark:text-slate-200"
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Job Description Section */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center">
+                      <Briefcase size={16} className="mr-2" /> Job Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={jobDescriptionText}
+                      onChange={(e) => setJobDescriptionText(e.target.value)}
+                      disabled={isLoading}
+                      placeholder="Paste the job description here..."
+                      className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-blue-500 dark:focus:border-blue-500 outline-none transition-all resize-none text-sm text-slate-700 dark:text-slate-200"
+                    />
+                  </div>
+
+                  {/* Action Button */}
+                  <button
+                    onClick={handleStartInterview}
+                    disabled={!canSubmitLobby}
+                    className="w-full py-4 mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <LoaderCircle className="animate-spin" size={20} />
+                        <span>Initializing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Start Interview</span>
+                        <ChevronRight size={20} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* === PHASE 2: CHAT === */}
+          {interviewPhase === "chat" && (
+            <>
+              <div
+                ref={chatContainerRef}
+                className="flex-1 w-full max-w-4xl px-4 py-6 overflow-y-auto no-scrollbar space-y-2 scroll-smooth"
+              >
+                {chatHistory.map((msg, index) => (
+                  <ChatBubble key={index} message={msg} />
+                ))}
+                {isLoading && (
+                  <div className="flex justify-start px-2 my-4">
+                    <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 px-4 py-3 rounded-2xl rounded-bl-none">
+                      <div
+                        className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "0ms" }}
+                      />
+                      <div
+                        className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "150ms" }}
+                      />
+                      <div
+                        className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "300ms" }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Area */}
+              <div className="w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4">
+                <div className="max-w-4xl mx-auto relative">
+                  <div className="flex items-end gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
+                    {hasSupport && (
+                      <button
+                        onClick={isListening ? stopListening : startListening}
+                        className={`p-3 rounded-full transition-all duration-300 flex-shrink-0 ${
+                          isListening
+                            ? "bg-red-500 text-white shadow-md animate-pulse"
+                            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                        }`}
+                        title={
+                          isListening ? "Stop Recording" : "Start Voice Input"
+                        }
+                        disabled={isLoading}
+                      >
+                        <Mic size={20} />
+                      </button>
+                    )}
+
+                    <textarea
+                      rows={1}
+                      value={currentInput}
+                      onChange={(e) => setCurrentInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && canSubmitChat) {
+                          e.preventDefault();
+                          handleSendAnswer();
+                        }
+                      }}
+                      disabled={isLoading}
+                      placeholder="Type your answer..."
+                      className="flex-1 bg-transparent border-none focus:ring-0 text-slate-800 dark:text-white placeholder-slate-400 py-3 px-2 resize-none max-h-32 overflow-y-auto leading-relaxed"
+                      onInput={(e) => {
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
+                    />
+
+                    <button
+                      onClick={handleSendAnswer}
+                      disabled={!canSubmitChat}
+                      className={`p-3 rounded-full flex-shrink-0 transition-all ${
+                        canSubmitChat
+                          ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                      }`}
+                    >
+                      {isLoading ? (
+                        <LoaderCircle className="animate-spin" size={20} />
+                      ) : (
+                        <Send size={20} />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-center text-xs text-slate-400 mt-2">
+                    AI can make mistakes. Please review critical information.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* === PHASE 3: REPORT === */}
+          {interviewPhase === "report" && (
+            <div className="w-full h-full p-4 flex items-center justify-center">
+              <div className="max-w-lg w-full">
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8 text-center"
                 >
-                  <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-slate-700 via-slate-500 to-slate-700 dark:from-slate-200 dark:via-slate-400 dark:to-slate-200 mb-4">
-                    Hello, {user?.firstName || 'Candidate'}.
-                  </h1>
-                  <h2 className="text-4xl font-semibold text-slate-500 dark:text-slate-400">
-                    Ready to start your interview?
-                  </h2>
+                  {isLoading ? (
+                    <div className="py-12">
+                      <LoadingSpinner text="Compiling detailed report..." />
+                    </div>
+                  ) : finalReport ? (
+                    <>
+                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600 dark:text-green-400">
+                        <FileText size={32} />
+                      </div>
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        Report Generated!
+                      </h2>
+                      <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        Your comprehensive interview analysis has been opened in
+                        a new tab.
+                      </p>
+                      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl mb-6 text-sm text-amber-800 dark:text-amber-300 border border-amber-100 dark:border-amber-800">
+                        If you don't see the tab, please check your popup
+                        blocker.
+                      </div>
+                      <button
+                        onClick={() => {
+                          setInterviewPhase("lobby");
+                          setChatHistory([]);
+                          setSessionId(null);
+                          setFinalReport(null);
+                          setError(null);
+                        }}
+                        className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-semibold rounded-xl transition-colors"
+                      >
+                        Start New Session
+                      </button>
+                    </>
+                  ) : (
+                    <div className="py-8">
+                      <p className="text-red-500 mb-4">
+                        {error || "Could not load report."}
+                      </p>
+                      <button
+                        onClick={handleFetchReport}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               </div>
             </div>
           )}
-
-          {/* --- CHAT UI --- */}
-          {interviewPhase === 'chat' && (
-            <div
-              ref={chatContainerRef}
-              className="w-full max-w-4xl mx-auto flex-1 overflow-y-auto pt-16 space-y-2 no-scrollbar"
-            >
-              {chatHistory.map((msg, index) => (
-                <ChatBubble key={index} message={msg} />
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="p-3 rounded-2xl max-w-lg bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-bl-none">
-                    <LoaderCircle className="w-5 h-5 animate-spin text-slate-500 dark:text-slate-400" />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* --- 8. NEW REPORT UI --- */}
-          {interviewPhase === 'report' && (
-            <div className="w-full max-w-4xl mx-auto flex-1 overflow-y-auto pt-16 space-y-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-              >
-                <h1 className="text-4xl font-bold text-slate-800 dark:text-slate-200 mb-4">
-                  Your Interview Report
-                </h1>
-                <p className="text-lg text-slate-600 dark:text-slate-400 mb-6">
-                  Here is a breakdown of your performance.
-                </p>
-              </motion.div>
-              {isLoading ? (
-                <LoadingSpinner text="Generating report..." />
-              ) : finalReport ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="bg-slate-50 dark:bg-slate-800 p-6 rounded-lg shadow-md"
-                >
-                  {/* A simple way to display the report. You can make this much prettier. */}
-                  <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-                    {JSON.stringify(finalReport, null, 2)}
-                  </pre>
-                </motion.div>
-              ) : (
-                // This will show if `finalReport` is null and not loading (i.e., an error)
-                <p className="text-red-500">{error || "Could not load report."}</p>
-              )}
-            </div>
-          )}
-
-
-          {/* --- BOTTOM INPUT BAR (Changes based on phase) --- */}
-          <div className="mt-auto w-full pt-4 max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="w-full"
-            >
-              {error && interviewPhase !== 'report' && <ErrorMessage message={error} onRetry={activeSubmitHandler} />}
-
-              {/* --- LOBBY INPUTS --- */}
-              {interviewPhase === 'lobby' && (
-                <>
-                  {resumeFile && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mb-3 ml-2 flex"
-                    >
-                      <div className="bg-slate-200 dark:bg-slate-700 rounded-lg p-2 flex items-center text-sm">
-                        <FileText className="w-4 h-4 mr-2 text-slate-600 dark:text-slate-300" />
-                        <span className="text-slate-800 dark:text-white font-medium">{resumeFile.name}</span>
-                        <button onClick={handleFileDismiss} className="ml-2 p-1 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600" disabled={isLoading}>
-                          <X className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                  {/* Resume Text Area */}
-                  <div className="relative mb-3">
-                    <textarea
-                      rows="1"
-                      value={resumeText}
-                      onChange={handleTextChange}
-                      disabled={isLoading || isAuthLoading || resumeFile}
-                      placeholder={resumeFile ? "File attached. Now add the job description." : "Paste resume, or upload a file..."}
-                      className="w-full pl-12 pr-12 py-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none disabled:cursor-not-allowed max-h-36 overflow-y-auto"
-                      onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
-                    />
-                    <div className="absolute left-3 top-12 -translate-y-1/2 flex items-center">
-                      {!resumeText && !isLoading && (
-                        <>
-                          <input
-                            type="file" id="resume-upload" className="hidden"
-                            onChange={handleFileChange} ref={fileInputRef}
-                            accept=".pdf,.doc,.docx,.txt"
-                          />
-                          <label htmlFor="resume-upload" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer">
-                            <Paperclip className="w-5 h-5" />
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {/* Job Description Text Area */}
-                  <div className="relative">
-                    <textarea
-                      rows="1"
-                      value={jobDescriptionText}
-                      onChange={(e) => setJobDescriptionText(e.target.value)}
-                      disabled={isLoading || isAuthLoading}
-                      placeholder="Paste the job description here..."
-                      className="w-full pl-12 pr-24 py-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none disabled:cursor-not-allowed max-h-36 overflow-y-auto"
-                      onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
-                    />
-                    {/* --- LOBBY SUBMIT BUTTON --- */}
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
-                      <button className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" disabled={isLoading || isAuthLoading || interviewPhase === 'finished'}>
-                        <Mic className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={activeSubmitHandler}
-                        disabled={!canSubmit}
-                        className="p-2 rounded-full bg-blue-500 text-white transition-colors disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center"
-                      >
-                        {isLoading ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* --- CHAT INPUT --- */}
-              {interviewPhase === 'chat' && (
-                <div className="relative">
-                  <textarea
-                    rows="1"
-                    value={currentInput}
-                    onChange={(e) => setCurrentInput(e.target.value)}
-                    disabled={isLoading || isAuthLoading}
-                    placeholder={"Type your answer..."}
-                    className="w-full pl-12 pr-24 py-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none disabled:cursor-not-allowed max-h-36 overflow-y-auto"
-                    onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px`; }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && canSubmit) {
-                        e.preventDefault();
-                        activeSubmitHandler();
-                      }
-                    }}
-                  />
-                  {/* --- CHAT SUBMIT BUTTON --- */}
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
-                    <button className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" disabled={isLoading || isAuthLoading}>
-                      <Mic className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={activeSubmitHandler}
-                      disabled={!canSubmit}
-                      className="p-2 rounded-full bg-blue-500 text-white transition-colors disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                      {isLoading ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* --- 9. HIDE FOOTER ON REPORT PAGE --- */}
-              {interviewPhase !== 'report' && (
-                <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-2 px-4">
-                  This is an AI-powered interview system. Your responses will be recorded and analyzed.
-                </p>
-              )}
-            </motion.div>
-          </div>
         </div>
       </main>
     </div>

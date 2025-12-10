@@ -70,6 +70,9 @@ async def retrieve_question_node(state: SessionState) -> dict:
     history = state.get("question_history", [])
     last_topics = [turn.raw_question_text for turn in history]
 
+    # --- EXTRACT ASKED IDs ---
+    asked_ids = [turn.question_id for turn in history if turn.question_id is not None]
+
     # This is the fix: pass arguments as keywords, not a single dict
     question_output = await retrieve_question(
         domain=topic,
@@ -78,6 +81,7 @@ async def retrieve_question_node(state: SessionState) -> dict:
         last_topics=last_topics,
         # --- ADD THIS LINE BACK ---
         difficulty_hint=state.get("difficulty_hint", 5),  # Uses 5 as a default
+        asked_ids=asked_ids,  # <-- Pass the filtered IDs here
     )
 
     turn = QuestionTurn(

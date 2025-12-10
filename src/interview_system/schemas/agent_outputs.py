@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from typing import List
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- NEW: A Generic Schema for Raw Question Data ---
@@ -145,12 +146,42 @@ class PersonalizationOutput(BaseModel):
     )
 
 
-# --- ReportGenAgent ---
-class ReportGenOutput(BaseModel):
-    report_html: str = Field(..., description="The final report as an HTML string.")
-    overall_score: float = Field(
-        ..., description="The final, aggregated score for the session."
+class QuestionBreakdownItem(BaseModel):
+    """A detailed analysis of a single interview question."""
+
+    question_number: int = Field(..., description="The number of the question, e.g., 1")
+    question_text: str = Field(..., description="The full text of the question asked.")
+    candidate_answer: str = Field(
+        ..., description="The candidate's full, verbatim answer."
     )
-    top_3_improvements: list[str] = Field(
-        ..., description="A list of the top three areas for improvement."
+    evaluation_score: float = Field(
+        ...,
+        description="The numeric score for this question (e.g., 83.5). Do not include the '%' sign.",
+    )
+    evaluation_summary: str = Field(
+        ..., description="A concise summary of the evaluation for this specific answer."
+    )
+    feedback_points: List[str] = Field(
+        ..., description="A list of specific feedback bullet points for improvement."
+    )
+
+
+class ReportGenOutput(BaseModel):
+    """The final structured JSON report for the interview session."""
+
+    overall_summary: str = Field(
+        ...,
+        description="A comprehensive overview of the candidate's performance during the session.",
+    )
+    overall_score: float = Field(
+        ...,
+        description="The final overall numeric score (e.g., 93.35). Do not include the '%' sign.",
+    )
+    top_3_improvements: List[str] = Field(
+        ...,
+        description="A list of the top 3 most important areas for improvement for the candidate.",
+    )
+    question_breakdown: List[QuestionBreakdownItem] = Field(
+        ...,
+        description="A detailed list, with one entry for each question asked during the interview.",
     )

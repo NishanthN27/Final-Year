@@ -7,9 +7,9 @@ from jinja2 import Environment, FileSystemLoader
 
 from interview_system.schemas.agent_outputs import (
     ConversationalQuestionOutput,
-    JobDescriptionAnalysisOutput,  # <-- Restored this import
+    JobDescriptionAnalysisOutput,
     RawQuestionData,
-    ResumeAnalysisOutput,  # <-- Restored this import
+    ResumeAnalysisOutput,
 )
 from interview_system.services.llm_clients import get_llm
 from interview_system.services.vector_store import get_vector_store
@@ -17,7 +17,7 @@ from interview_system.services.vector_store import get_vector_store
 from ..api.database import get_db_session
 from ..repositories.review_queue_repository import ReviewQueueRepository
 
-logger = logging.getLogger(__name__)  # <-- From your teammate
+logger = logging.getLogger(__name__)
 
 FALLBACK_MIN_RELEVANCE = 0.35
 
@@ -52,7 +52,6 @@ async def _make_question_conversational(
     )
 
 
-# --- This is your teammate's good, fixed fallback function ---
 async def _generate_and_present_fallback(
     domain: str,
     difficulty: int,
@@ -142,8 +141,6 @@ async def _generate_and_present_fallback(
         )
 
 
-# --- This is the retrieve_question function with the RAG FIX ---
-# --- It REPLACES your teammate's broken one ---
 async def retrieve_question(
     *,
     domain: str,
@@ -152,6 +149,7 @@ async def retrieve_question(
     last_topics: List[str] | None = None,
     difficulty_hint: int = 5,
     min_relevance: float = FALLBACK_MIN_RELEVANCE,
+    asked_ids: List[str] | None = None,  # <--- NEW PARAMETER
 ) -> ConversationalQuestionOutput:
     logger.info(f"--- Agent: Retrieving question for domain: {domain} ---")
 
@@ -201,7 +199,7 @@ async def retrieve_question(
     # 2. Fetch more candidates
     candidates = store.query_similar(
         query_text=transformed_query,
-        top_k=5,  # Fetch 5 to filter in Python
+        top_k=7,  # Fetch 15 to account for filtered duplicates
         where=where,
         namespace="updated-namespace",
     )
@@ -211,6 +209,13 @@ async def retrieve_question(
     if candidates:
         # 3. Filter in Python
         for candidate in candidates:
+            # --- FILTERING LOGIC ---
+            candidate_id = str(candidate.get("id", ""))
+            if asked_ids and candidate_id in asked_ids:
+                logger.info(f"Skipping duplicate question ID: {candidate_id}")
+                continue
+            # -----------------------
+
             meta = candidate.get("metadata", {}) or {}
             meta_domain = str(meta.get("domain", "")).strip()
 
