@@ -1,0 +1,78 @@
+# Production override configuration
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  postgres_db:
+    # Use stronger password in production (via .env)
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Don't expose port externally in production
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  redis:
+    # Don't expose port externally in production
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  backend:
+    # Remove volume mounts in production for security
+    volumes: []
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=WARNING
+    # Don't expose port externally - only accessible via frontend
+    ports: []
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    command: >
+      sh -c "
+        echo 'Running database migrations...'
+        alembic upgrade head
+        echo 'Starting production server...'
+        uvicorn interview_system.api.main:app --host 0.0.0.0 --port 8000 --workers 4
+      "
+
+  frontend:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
