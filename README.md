@@ -6,11 +6,49 @@ This project is a cloud-hosted mock-interview platform that uses a LangGraph orc
 
 ## Getting Started
 
-Follow these instructions to set up your local development environment.
+You can run this application in two ways:
+1. **Docker (Recommended)** - Complete containerized setup
+2. **Local Development** - Traditional Python environment
 
-### Prerequisites
+### 🐳 Quick Start with Docker (Recommended)
+
+The fastest way to get started:
+
+```bash
+# Clone the repository
+git clone https://github.com/NishanthN27/Final-Year.git
+cd Final-Year
+
+# Run the quick start script
+./docker-quickstart.sh
+```
+
+The script will:
+- Check prerequisites (Docker, Docker Compose)
+- Set up environment variables
+- Build and start all services
+- Run database migrations
+- Optionally seed the database
+
+Access the application:
+- **Frontend**: http://localhost
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+For detailed Docker instructions, see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+
+---
+
+### 💻 Local Development Setup
+
+If you prefer to run without Docker:
+
+#### Prerequisites
 
 - Python 3.11
+- Node.js 18+
+- PostgreSQL 15
+- Redis 7
 - Git
 
 ### 1. Clone the Repository
